@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GameHook Speedrun Timer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Orbitron', monospace;
+      background: transparent;
+      color: #00ff00;
+      text-shadow: 0 0 10px #00ff00;
+      overflow: hidden;
+    }
+
+    .speedrun-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      max-width: 400px;
+    }
+
+    .timer-main {
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff00;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+
+    .timer-display {
+      font-size: 3rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+      text-shadow: 0 0 15px #00ff00;
+    }
+
+    .timer-display.pb {
+      color: #ffd700;
+      text-shadow: 0 0 15px #ffd700;
+      animation: pulse 1s infinite;
+    }
+
+    .timer-display.behind {
+      color: #ff4444;
+      text-shadow: 0 0 15px #ff4444;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .timer-status {
+      font-size: 1rem;
+      opacity: 0.8;
+      margin-bottom: 15px;
+    }
+
+    .splits-container {
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff00;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+
+    .splits-header {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      text-align: center;
+      border-bottom: 1px solid #00ff00;
+      padding-bottom: 5px;
+    }
+
+    .split-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      font-size: 0.9rem;
+      border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+    }
+
+    .split-row:last-child {
+      border-bottom: none;
+    }
+
+    .split-row.current {
+      background: rgba(0, 255, 0, 0.1);
+      font-weight: 700;
+    }
+
+    .split-row.completed.ahead {
+      color: #44ff44;
+    }
+
+    .split-row.completed.behind {
+      color: #ff4444;
+    }
+
+    .split-name {
+      flex: 1;
+      text-align: left;
+    }
+
+    .split-time {
+      text-align: right;
+      min-width: 80px;
+    }
+
+    .split-diff {
+      text-align: right;
+      min-width: 60px;
+      font-size: 0.8rem;
+    }
+
+    .controls {
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff00;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+
+    .btn {
+      background: transparent;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 8px 16px;
+      margin: 0 5px;
+      border-radius: 5px;
+      font-family: 'Orbitron', monospace;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-shadow: 0 0 10px #00ff00;
+    }
+
+    .btn:hover {
+      background: rgba(0, 255, 0, 0.1);
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    }
+
+    .btn:active {
+      background: rgba(0, 255, 0, 0.2);
+    }
+
+    .btn.danger {
+      border-color: #ff4444;
+      color: #ff4444;
+      text-shadow: 0 0 10px #ff4444;
+    }
+
+    .btn.danger:hover {
+      background: rgba(255, 68, 68, 0.1);
+      box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+    }
+
+    .game-info {
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff00;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    .info-label {
+      opacity: 0.8;
+    }
+
+    .connection-status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 5px 10px;
+      border-radius: 15px;
+      font-size: 0.7rem;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid;
+    }
+
+    .connection-status.connected {
+      border-color: #00ff00;
+      color: #00ff00;
+    }
+
+    .connection-status.disconnected {
+      border-color: #ff4444;
+      color: #ff4444;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div class="connection-status disconnected" id="connectionStatus">OFFLINE</div>
+
+<div class="speedrun-container">
+  <!-- Main Timer -->
+  <div class="timer-main">
+    <div class="timer-display" id="timerDisplay">00:00.00</div>
+    <div class="timer-status" id="timerStatus">Ready to start</div>
+  </div>
+
+  <!-- Game Information -->
+  <div class="game-info" id="gameInfo">
+    <div class="info-row">
+      <span class="info-label">Game:</span>
+      <span id="gameName">No mapper loaded</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Level:</span>
+      <span id="currentLevel">-</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Lives:</span>
+      <span id="playerLives">-</span>
+    </div>
+  </div>
+
+  <!-- Splits -->
+  <div class="splits-container">
+    <div class="splits-header">Splits</div>
+    <div id="splitsList">
+      <div class="split-row current">
+        <span class="split-name">1-1</span>
+        <span class="split-time">--:--</span>
+        <span class="split-diff">±0</span>
+      </div>
+      <div class="split-row">
+        <span class="split-name">1-2</span>
+        <span class="split-time">--:--</span>
+        <span class="split-diff">±0</span>
+      </div>
+      <div class="split-row">
+        <span class="split-name">1-3</span>
+        <span class="split-time">--:--</span>
+        <span class="split-diff">±0</span>
+      </div>
+      <div class="split-row">
+        <span class="split-name">1-4</span>
+        <span class="split-time">--:--</span>
+        <span class="split-diff">±0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn" id="startBtn" onclick="startTimer()">START</button>
+    <button class="btn" id="splitBtn" onclick="split()" disabled>SPLIT</button>
+    <button class="btn danger" id="resetBtn" onclick="resetTimer()">RESET</button>
+  </div>
+</div>
+
+<script>
+  class SpeedrunTimer {
+    constructor() {
+      this.startTime = null;
+      this.currentTime = 0;
+      this.isRunning = false;
+      this.currentSplit = 0;
+      this.splits = [];
+      this.pbSplits = []; // Personal best splits
+      this.gameHookClient = null;
+      this.currentGame = null;
+
+      // Default splits for Super Mario Bros
+      this.defaultSplits = [
+        { name: "1-1", pb: 25.30 },
+        { name: "1-2", pb: 52.15 },
+        { name: "1-3", pb: 78.90 },
+        { name: "1-4", pb: 105.25 },
+        { name: "2-1", pb: 135.50 },
+        { name: "2-2", pb: 162.75 },
+        { name: "2-3", pb: 188.20 },
+        { name: "2-4", pb: 215.45 }
+      ];
+
+      this.initializeGameHook();
+      this.initializeSplits();
+      this.startDisplay();
+    }
+
+    async initializeGameHook() {
+      try {
+        // Connect to GameHook
+        const response = await fetch('http://localhost:8080/api/mappers');
+        if (response.ok) {
+          this.updateConnectionStatus(true);
+          this.setupWebSocket();
+          this.loadCurrentMapper();
+        }
+      } catch (error) {
+        this.updateConnectionStatus(false);
+        console.log('GameHook not available, running in standalone mode');
+      }
+    }
+
+    setupWebSocket() {
+      const ws = new WebSocket('ws://localhost:8080/api/stream');
+
+      ws.onopen = () => {
+        console.log('Connected to GameHook WebSocket');
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        this.handleGameHookMessage(data);
+      };
+
+      ws.onclose = () => {
+        this.updateConnectionStatus(false);
+        setTimeout(() => this.setupWebSocket(), 2000);
+      };
+    }
+
+    async loadCurrentMapper() {
+      try {
+        const response = await fetch('http://localhost:8080/api/mapper');
+        if (response.ok) {
+          this.currentGame = await response.json();
+          this.updateGameInfo();
+        }
+      } catch (error) {
+        console.log('No mapper loaded');
+      }
+    }
+
+    handleGameHookMessage(data) {
+      if (data.type === 'property_changed') {
+        this.updateGameProperty(data.property, data.value);
+      } else if (data.type === 'mapper_loaded') {
+        this.loadCurrentMapper();
+      }
+    }
+
+    updateGameProperty(property, value) {
+      switch (property) {
+        case 'world':
+        case 'level':
+          this.updateLevel();
+          break;
+        case 'marioLives':
+        case 'lives':
+          document.getElementById('playerLives').textContent = value || '-';
+          break;
+      }
+    }
+
+    async updateLevel() {
+      try {
+        const worldResponse = await fetch('http://localhost:8080/api/properties/world');
+        const levelResponse = await fetch('http://localhost:8080/api/properties/level');
+
+        if (worldResponse.ok && levelResponse.ok) {
+          const world = await worldResponse.json();
+          const level = await levelResponse.json();
+          document.getElementById('currentLevel').textContent = `${world.value}-${level.value}`;
+        }
+      } catch (error) {
+        console.log('Failed to update level');
+      }
+    }
+
+    updateGameInfo() {
+      if (this.currentGame) {
+        document.getElementById('gameName').textContent = this.currentGame.name || 'Unknown Game';
+      } else {
+        document.getElementById('gameName').textContent = 'No mapper loaded';
+      }
+    }
+
+    updateConnectionStatus(connected) {
+      const status = document.getElementById('connectionStatus');
+      if (connected) {
+        status.textContent = 'ONLINE';
+        status.className = 'connection-status connected';
+      } else {
+        status.textContent = 'OFFLINE';
+        status.className = 'connection-status disconnected';
+      }
+    }
+
+    initializeSplits() {
+      const splitsList = document.getElementById('splitsList');
+      splitsList.innerHTML = '';
+
+      this.defaultSplits.forEach((split, index) => {
+        const row = document.createElement('div');
+        row.className = `split-row ${index === 0 ? 'current' : ''}`;
+        row.innerHTML = `
+                        <span class="split-name">${split.name}</span>
+                        <span class="split-time">--:--</span>
+                        <span class="split-diff">±0</span>
+                    `;
+        splitsList.appendChild(row);
+      });
+    }
+
+    startDisplay() {
+      setInterval(() => {
+        if (this.isRunning) {
+          this.currentTime = (Date.now() - this.startTime) / 1000;
+        }
+        this.updateDisplay();
+      }, 10); // Update every 10ms for smooth display
+    }
+
+    updateDisplay() {
+      const display = document.getElementById('timerDisplay');
+      const minutes = Math.floor(this.currentTime / 60);
+      const seconds = (this.currentTime % 60).toFixed(2);
+
+      display.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.padStart(5, '0')}`;
+
+      // Update display color based on PB comparison
+      if (this.isRunning && this.currentSplit < this.defaultSplits.length) {
+        const pbTime = this.defaultSplits[this.currentSplit].pb;
+        if (this.currentTime > pbTime) {
+          display.className = 'timer-display behind';
+        } else if (this.currentTime < pbTime - 1) {
+          display.className = 'timer-display pb';
+        } else {
+          display.className = 'timer-display';
+        }
+      }
+    }
+
+    startTimer() {
+      if (!this.isRunning) {
+        this.startTime = Date.now();
+        this.isRunning = true;
+        this.currentSplit = 0;
+        this.splits = [];
+
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('splitBtn').disabled = false;
+        document.getElementById('timerStatus').textContent = 'Running...';
+
+        // Highlight first split
+        this.updateSplitHighlight();
+      }
+    }
+
+    split() {
+      if (this.isRunning && this.currentSplit < this.defaultSplits.length) {
+        const splitTime = this.currentTime;
+        this.splits.push(splitTime);
+
+        // Update split display
+        const splitRows = document.querySelectorAll('.split-row');
+        const currentRow = splitRows[this.currentSplit];
+
+        const minutes = Math.floor(splitTime / 60);
+        const seconds = (splitTime % 60).toFixed(2);
+        const timeText = `${minutes.toString().padStart(2, '0')}:${seconds.padStart(5, '0')}`;
+
+        currentRow.querySelector('.split-time').textContent = timeText;
+
+        // Calculate difference from PB
+        const pbTime = this.defaultSplits[this.currentSplit].pb;
+        const diff = splitTime - pbTime;
+        const diffText = diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+        currentRow.querySelector('.split-diff').textContent = diffText;
+
+        // Color the split based on performance
+        if (diff < 0) {
+          currentRow.classList.add('completed', 'ahead');
+        } else {
+          currentRow.classList.add('completed', 'behind');
+        }
+
+        currentRow.classList.remove('current');
+
+        this.currentSplit++;
+
+        // Check if finished
+        if (this.currentSplit >= this.defaultSplits.length) {
+          this.finishRun();
+        } else {
+          this.updateSplitHighlight();
+        }
+      }
+    }
+
+    finishRun() {
+      this.isRunning = false;
+      document.getElementById('splitBtn').disabled = true;
+      document.getElementById('startBtn').disabled = false;
+
+      const finalTime = this.currentTime;
+      const totalPB = this.defaultSplits[this.defaultSplits.length - 1].pb;
+      const improvement = totalPB - finalTime;
+
+      if (improvement > 0) {
+        document.getElementById('timerStatus').textContent = `PB by ${improvement.toFixed(2)}s!`;
+        document.getElementById('timerDisplay').className = 'timer-display pb';
+      } else {
+        document.getElementById('timerStatus').textContent = `+${Math.abs(improvement).toFixed(2)}s`;
+        document.getElementById('timerDisplay').className = 'timer-display behind';
+      }
+    }
+
+    updateSplitHighlight() {
+      const splitRows = document.querySelectorAll('.split-row');
+      splitRows.forEach(row => row.classList.remove('current'));
+
+      if (this.currentSplit < splitRows.length) {
+        splitRows[this.currentSplit].classList.add('current');
+      }
+    }
+
+    resetTimer() {
+      this.isRunning = false;
+      this.currentTime = 0;
+      this.currentSplit = 0;
+      this.splits = [];
+
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('splitBtn').disabled = true;
+      document.getElementById('timerStatus').textContent = 'Ready to start';
+      document.getElementById('timerDisplay').className = 'timer-display';
+
+      // Reset splits display
+      this.initializeSplits();
+    }
+  }
+
+  // Global functions for button handlers
+  let timer;
+
+  function startTimer() {
+    timer.startTimer();
+  }
+
+  function split() {
+    timer.split();
+  }
+
+  function resetTimer() {
+    timer.resetTimer();
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (event) => {
+    switch (event.code) {
+      case 'Space':
+        event.preventDefault();
+        if (timer.isRunning) {
+          split();
+        } else {
+          startTimer();
+        }
+        break;
+      case 'Escape':
+        event.preventDefault();
+        resetTimer();
+        break;
+    }
+  });
+
+  // Initialize timer when page loads
+  document.addEventListener('DOMContentLoaded', () => {
+    timer = new SpeedrunTimer();
+  });
+</script>
+</body>
+</html>

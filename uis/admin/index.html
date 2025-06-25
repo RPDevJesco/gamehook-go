@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GameHook Go - Admin Panel</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2a2a2a;
+      --bg-tertiary: #3a3a3a;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #888888;
+      --accent-primary: #4CAF50;
+      --accent-secondary: #2196F3;
+      --accent-warning: #FF9800;
+      --accent-error: #f44336;
+      --border-color: #444444;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .header {
+      background: var(--bg-secondary);
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      color: var(--accent-primary);
+      font-size: 1.8rem;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent-error);
+      transition: background 0.3s;
+    }
+
+    .status-indicator.connected {
+      background: var(--accent-primary);
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      height: calc(100vh - 80px);
+    }
+
+    .sidebar {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+
+    .main-content {
+      padding: 2rem;
+      overflow-y: auto;
+    }
+
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    .section h2 {
+      margin: 0 0 1rem 0;
+      color: var(--accent-secondary);
+      font-size: 1.3rem;
+    }
+
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .card h3 {
+      margin: 0 0 1rem 0;
+      color: var(--text-primary);
+    }
+
+    .mapper-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .mapper-item {
+      padding: 0.8rem;
+      margin-bottom: 0.5rem;
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: 2px solid transparent;
+    }
+
+    .mapper-item:hover {
+      background: var(--bg-primary);
+    }
+
+    .mapper-item.active {
+      border-color: var(--accent-primary);
+      background: var(--bg-primary);
+    }
+
+    .mapper-name {
+      font-weight: bold;
+      color: var(--text-primary);
+    }
+
+    .mapper-platform {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: var(--accent-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+    }
+
+    .btn-secondary {
+      background: var(--accent-secondary);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #1976D2;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .properties-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+    }
+
+    .property-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+
+    .property-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .property-name {
+      font-weight: bold;
+      color: var(--text-primary);
+    }
+
+    .property-type {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: var(--bg-primary);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .property-value {
+      font-size: 1.2rem;
+      color: var(--accent-primary);
+      font-family: 'Courier New', monospace;
+      margin-bottom: 0.5rem;
+    }
+
+    .property-address {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .property-description {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-top: 0.5rem;
+    }
+
+    .loading {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 2rem;
+    }
+
+    .error {
+      color: var(--accent-error);
+      background: rgba(244, 67, 54, 0.1);
+      border: 1px solid var(--accent-error);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .success {
+      color: var(--accent-primary);
+      background: rgba(76, 175, 80, 0.1);
+      border: 1px solid var(--accent-primary);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .input-group {
+      margin-bottom: 1rem;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: var(--text-secondary);
+    }
+
+    .input-group input, .input-group select {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    .input-group input:focus, .input-group select:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 1rem;
+    }
+
+    .tab {
+      padding: 0.8rem 1.5rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .tab.active {
+      border-bottom-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="header">
+  <h1>🎮 GameHook Go</h1>
+  <div class="status">
+    <div class="status-indicator" id="statusIndicator"></div>
+    <span id="statusText">Disconnected</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="sidebar">
+    <div class="section">
+      <h2>Mappers</h2>
+      <ul class="mapper-list" id="mapperList">
+        <li class="loading">Loading mappers...</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="tabs">
+      <div class="tab active" data-tab="overview">Overview</div>
+      <div class="tab" data-tab="properties">Properties</div>
+      <div class="tab" data-tab="memory">Memory</div>
+      <div class="tab" data-tab="settings">Settings</div>
+    </div>
+
+    <div id="messages"></div>
+
+    <!-- Overview Tab -->
+    <div class="tab-content active" id="overview">
+      <div class="section">
+        <h2>Current Mapper</h2>
+        <div class="card" id="mapperInfo">
+          <div class="loading">No mapper loaded</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Quick Actions</h2>
+        <div class="card">
+          <button class="btn btn-primary" onclick="refreshMappers()">Refresh Mappers</button>
+          <button class="btn btn-secondary" onclick="loadMapper()">Load Selected Mapper</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Properties Tab -->
+    <div class="tab-content" id="properties">
+      <div class="section">
+        <h2>Game Properties</h2>
+        <div class="properties-grid" id="propertiesGrid">
+          <div class="loading">Load a mapper to see properties</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Memory Tab -->
+    <div class="tab-content" id="memory">
+      <div class="section">
+        <h2>Memory Inspector</h2>
+        <div class="card">
+          <div class="input-group">
+            <label for="memoryAddress">Address (hex)</label>
+            <input type="text" id="memoryAddress" placeholder="0x0000" value="0x0000">
+          </div>
+          <div class="input-group">
+            <label for="memoryLength">Length</label>
+            <input type="number" id="memoryLength" placeholder="16" value="16" min="1" max="256">
+          </div>
+          <button class="btn btn-primary" onclick="readMemory()">Read Memory</button>
+        </div>
+        <div class="card" id="memoryView">
+          <div class="loading">Enter address and length to read memory</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-content" id="settings">
+      <div class="section">
+        <h2>Connection Settings</h2>
+        <div class="card">
+          <div class="input-group">
+            <label for="serverUrl">Server URL</label>
+            <input type="text" id="serverUrl" value="http://localhost:8080">
+          </div>
+          <div class="input-group">
+            <label for="updateInterval">Update Interval (ms)</label>
+            <input type="number" id="updateInterval" value="1000" min="100" max="10000">
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  class GameHookAdmin {
+    constructor() {
+      this.baseUrl = localStorage.getItem('gameHookUrl') || 'http://localhost:8080';
+      this.updateInterval = parseInt(localStorage.getItem('updateInterval')) || 1000;
+      this.ws = null;
+      this.connected = false;
+      this.currentMapper = null;
+      this.selectedMapperId = null;
+      this.properties = {};
+
+      this.init();
+    }
+
+    init() {
+      this.setupEventListeners();
+      this.connect();
+      this.refreshMappers();
+    }
+
+    setupEventListeners() {
+      // Tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+          const tabId = e.target.dataset.tab;
+          this.switchTab(tabId);
+        });
+      });
+
+      // Auto-refresh properties
+      setInterval(() => {
+        if (this.connected && this.currentMapper) {
+          this.refreshProperties();
+        }
+      }, this.updateInterval);
+    }
+
+    switchTab(tabId) {
+      // Update tab buttons
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+
+      // Update tab content
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    async connect() {
+      try {
+        // Test HTTP connection
+        const response = await fetch(`${this.baseUrl}/api/mappers`);
+        if (!response.ok) throw new Error('HTTP connection failed');
+
+        // Setup WebSocket
+        this.ws = new WebSocket(`ws://localhost:8080/api/stream`);
+
+        this.ws.onopen = () => {
+          this.connected = true;
+          this.updateStatus();
+          this.refreshCurrentMapper();
+        };
+
+        this.ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          this.handleWebSocketMessage(data);
+        };
+
+        this.ws.onclose = () => {
+          this.connected = false;
+          this.updateStatus();
+          setTimeout(() => this.connect(), 2000);
+        };
+
+      } catch (error) {
+        this.connected = false;
+        this.updateStatus();
+        setTimeout(() => this.connect(), 2000);
+      }
+    }
+
+    updateStatus() {
+      const indicator = document.getElementById('statusIndicator');
+      const text = document.getElementById('statusText');
+
+      if (this.connected) {
+        indicator.classList.add('connected');
+        text.textContent = 'Connected';
+      } else {
+        indicator.classList.remove('connected');
+        text.textContent = 'Disconnected';
+      }
+    }
+
+    handleWebSocketMessage(data) {
+      if (data.type === 'property_changed') {
+        this.properties[data.property] = data.value;
+        this.updatePropertyDisplay(data.property, data.value);
+      } else if (data.type === 'mapper_loaded') {
+        this.refreshCurrentMapper();
+        this.refreshProperties();
+      }
+    }
+
+    async refreshMappers() {
+      try {
+        const response = await fetch(`${this.baseUrl}/api/mappers`);
+        const data = await response.json();
+
+        const mapperList = document.getElementById('mapperList');
+        mapperList.innerHTML = '';
+
+        if (data.mappers && data.mappers.length > 0) {
+          data.mappers.forEach(mapper => {
+            const li = document.createElement('li');
+            li.className = 'mapper-item';
+            li.innerHTML = `
+                                <div class="mapper-name">${mapper}</div>
+                                <div class="mapper-platform">Platform: Unknown</div>
+                            `;
+            li.addEventListener('click', () => {
+              document.querySelectorAll('.mapper-item').forEach(item => {
+                item.classList.remove('active');
+              });
+              li.classList.add('active');
+              this.selectedMapperId = mapper;
+            });
+            mapperList.appendChild(li);
+          });
+        } else {
+          mapperList.innerHTML = '<li class="loading">No mappers found</li>';
+        }
+      } catch (error) {
+        this.showError('Failed to load mappers: ' + error.message);
+      }
+    }
+
+    async loadMapper() {
+      if (!this.selectedMapperId) {
+        this.showError('Please select a mapper first');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${this.baseUrl}/api/mappers/${this.selectedMapperId}/load`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          this.showSuccess(`Mapper ${this.selectedMapperId} loaded successfully`);
+          this.refreshCurrentMapper();
+          this.refreshProperties();
+        } else {
+          this.showError(data.message || 'Failed to load mapper');
+        }
+      } catch (error) {
+        this.showError('Failed to load mapper: ' + error.message);
+      }
+    }
+
+    async refreshCurrentMapper() {
+      try {
+        const response = await fetch(`${this.baseUrl}/api/mapper`);
+
+        if (response.ok) {
+          this.currentMapper = await response.json();
+          this.updateMapperDisplay();
+        } else {
+          this.currentMapper = null;
+          document.getElementById('mapperInfo').innerHTML = '<div class="loading">No mapper loaded</div>';
+        }
+      } catch (error) {
+        this.currentMapper = null;
+        document.getElementById('mapperInfo').innerHTML = '<div class="loading">Failed to load mapper info</div>';
+      }
+    }
+
+    updateMapperDisplay() {
+      const mapperInfo = document.getElementById('mapperInfo');
+      if (this.currentMapper) {
+        mapperInfo.innerHTML = `
+                        <h3>${this.currentMapper.name || 'Unknown Mapper'}</h3>
+                        <p><strong>Game:</strong> ${this.currentMapper.game || 'Unknown'}</p>
+                        <p><strong>Platform:</strong> ${this.currentMapper.platform || 'Unknown'}</p>
+                        <p><strong>Properties:</strong> ${Object.keys(this.currentMapper.properties || {}).length}</p>
+                    `;
+      } else {
+        mapperInfo.innerHTML = '<div class="loading">No mapper loaded</div>';
+      }
+    }
+
+    async refreshProperties() {
+      if (!this.currentMapper) return;
+
+      const propertiesGrid = document.getElementById('propertiesGrid');
+      propertiesGrid.innerHTML = '';
+
+      // Get all property names from current mapper
+      const propertyNames = Object.keys(this.currentMapper.properties || {});
+
+      if (propertyNames.length === 0) {
+        propertiesGrid.innerHTML = '<div class="loading">No properties found</div>';
+        return;
+      }
+
+      // Fetch current values for all properties
+      for (const propName of propertyNames) {
+        try {
+          const response = await fetch(`${this.baseUrl}/api/properties/${propName}`);
+          if (response.ok) {
+            const data = await response.json();
+            this.properties[propName] = data.value;
+            this.addPropertyCard(propName, data.value);
+          }
+        } catch (error) {
+          console.warn(`Failed to load property ${propName}:`, error);
+        }
+      }
+    }
+
+    addPropertyCard(name, value) {
+      const propertiesGrid = document.getElementById('propertiesGrid');
+      const property = this.currentMapper.properties[name];
+
+      const card = document.createElement('div');
+      card.className = 'property-card';
+      card.id = `property-${name}`;
+      card.innerHTML = `
+                    <div class="property-header">
+                        <div class="property-name">${name}</div>
+                        <div class="property-type">${property?.type || 'unknown'}</div>
+                    </div>
+                    <div class="property-value" id="value-${name}">${this.formatValue(value)}</div>
+                    <div class="property-address">${property?.address || 'Unknown address'}</div>
+                    ${property?.description ? `<div class="property-description">${property.description}</div>` : ''}
+                `;
+
+      propertiesGrid.appendChild(card);
+    }
+
+    updatePropertyDisplay(name, value) {
+      const valueElement = document.getElementById(`value-${name}`);
+      if (valueElement) {
+        valueElement.textContent = this.formatValue(value);
+      }
+    }
+
+    formatValue(value) {
+      if (value === null || value === undefined) return '?';
+      if (typeof value === 'number') return value.toString();
+      if (typeof value === 'boolean') return value ? 'true' : 'false';
+      if (Array.isArray(value)) return `[${value.length} items]`;
+      return String(value);
+    }
+
+    async readMemory() {
+      const address = document.getElementById('memoryAddress').value;
+      const length = document.getElementById('memoryLength').value;
+
+      try {
+        const response = await fetch(`${this.baseUrl}/api/memory/${address}/${length}`);
+        const data = await response.json();
+
+        const memoryView = document.getElementById('memoryView');
+        memoryView.innerHTML = `
+                        <h3>Memory at ${address}</h3>
+                        <p>Length: ${length} bytes</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+      } catch (error) {
+        this.showError('Failed to read memory: ' + error.message);
+      }
+    }
+
+    saveSettings() {
+      const serverUrl = document.getElementById('serverUrl').value;
+      const updateInterval = document.getElementById('updateInterval').value;
+
+      localStorage.setItem('gameHookUrl', serverUrl);
+      localStorage.setItem('updateInterval', updateInterval);
+
+      this.baseUrl = serverUrl;
+      this.updateInterval = parseInt(updateInterval);
+
+      this.showSuccess('Settings saved');
+
+      // Reconnect with new settings
+      if (this.ws) {
+        this.ws.close();
+      }
+      this.connect();
+    }
+
+    showError(message) {
+      this.showMessage(message, 'error');
+    }
+
+    showSuccess(message) {
+      this.showMessage(message, 'success');
+    }
+
+    showMessage(message, type) {
+      const messages = document.getElementById('messages');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = type;
+      messageDiv.textContent = message;
+
+      messages.appendChild(messageDiv);
+
+      setTimeout(() => {
+        messageDiv.remove();
+      }, 5000);
+    }
+  }
+
+  // Global functions for onclick handlers
+  let admin;
+
+  function refreshMappers() {
+    admin.refreshMappers();
+  }
+
+  function loadMapper() {
+    admin.loadMapper();
+  }
+
+  function readMemory() {
+    admin.readMemory();
+  }
+
+  function saveSettings() {
+    admin.saveSettings();
+  }
+
+  // Initialize admin when page loads
+  document.addEventListener('DOMContentLoaded', () => {
+    admin = new GameHookAdmin();
+  });
+</script>
+</body>
+</html>

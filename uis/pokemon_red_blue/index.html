@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Red/Blue - GameHook Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            font-size: 14px;
+            padding: 15px;
+            min-height: 100vh;
+        }
+
+        .pokemon-overlay {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.85);
+            border: 3px solid #ffcc00;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            position: relative;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #ffcc00, #ff6b6b, #4ecdc4, #45b7d1);
+            border-radius: 12px;
+            z-index: -1;
+            opacity: 0.7;
+        }
+
+        .panel h2 {
+            color: #ffcc00;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            font-size: 16px;
+            letter-spacing: 1px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .trainer-info {
+            grid-column: 1 / -1;
+            text-align: center;
+        }
+
+        .trainer-name {
+            font-size: 24px;
+            color: #ffcc00;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            margin-bottom: 8px;
+        }
+
+        .party-count {
+            font-size: 18px;
+            color: #4ecdc4;
+        }
+
+        .pokemon-slot {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            border-left: 4px solid #4ecdc4;
+            transition: all 0.3s ease;
+        }
+
+        .pokemon-slot:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .pokemon-slot.active {
+            border-left-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .pokemon-slot.empty {
+            opacity: 0.5;
+            border-left-color: #666;
+        }
+
+        .pokemon-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .pokemon-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .pokemon-level {
+            background: #ffcc00;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .pokemon-species {
+            color: #4ecdc4;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .hp-bar {
+            background: #333;
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+
+        .hp-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+
+        .hp-high { background: #4caf50; }
+        .hp-medium { background: #ff9800; }
+        .hp-low { background: #f44336; }
+        .hp-critical { background: #d32f2f; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .hp-text {
+            font-size: 12px;
+            text-align: right;
+            margin-top: 2px;
+            color: #ccc;
+        }
+
+        .battle-panel {
+            grid-column: 1 / -1;
+        }
+
+        .battle-status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .battle-none {
+            background: rgba(76, 175, 80, 0.3);
+            color: #4caf50;
+        }
+
+        .battle-wild {
+            background: rgba(255, 152, 0, 0.3);
+            color: #ff9800;
+        }
+
+        .battle-trainer {
+            background: rgba(244, 67, 54, 0.3);
+            color: #f44336;
+        }
+
+        .battle-lost-battle {
+            background: rgba(156, 39, 176, 0.3);
+            color: #9c27b0;
+        }
+
+        .battle-unknown {
+            background: rgba(96, 125, 139, 0.3);
+            color: #607d8b;
+        }
+
+        .active-pokemon {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .connected {
+            background: #4caf50;
+            color: #fff;
+        }
+
+        .disconnected {
+            background: #f44336;
+            color: #fff;
+        }
+
+        .loading {
+            background: #ff9800;
+            color: #fff;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-size: 12px;
+        }
+
+        .stat-label {
+            color: #ccc;
+        }
+
+        .stat-value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .pokemon-overlay {
+                grid-template-columns: 1fr;
+            }
+
+            .battle-panel {
+                grid-column: 1;
+            }
+
+            .trainer-info {
+                grid-column: 1;
+            }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="connection-status" id="status">Loading...</div>
+
+<div class="pokemon-overlay">
+    <!-- Trainer Info -->
+    <div class="panel trainer-info">
+        <h2>🎒 Trainer Info</h2>
+        <div class="trainer-name" id="trainer-name">Loading...</div>
+        <div class="party-count" id="party-count">Party: 0/6</div>
+    </div>
+
+    <!-- Party Pokemon -->
+    <div class="panel">
+        <h2>⚡ Pokemon Party</h2>
+        <div id="party-pokemon">
+            <div class="empty-state">No Pokemon data loaded</div>
+        </div>
+    </div>
+
+    <!-- Game Stats -->
+    <div class="panel">
+        <h2>💎 Game Progress</h2>
+        <div class="stat-row">
+            <span class="stat-label">Money:</span>
+            <span class="stat-value" id="money">$0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Badges:</span>
+            <span class="stat-value" id="badges">0/8</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Current Map:</span>
+            <span class="stat-value" id="current-map">#0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Rival:</span>
+            <span class="stat-value" id="rival-name">-</span>
+        </div>
+    </div>
+
+    <!-- Battle Info -->
+    <div class="panel battle-panel">
+        <h2>⚔️ Battle Status</h2>
+        <div class="battle-status battle-none" id="battle-status">
+            Not in battle
+        </div>
+
+        <div id="battle-pokemon" style="display: none;">
+            <div class="active-pokemon">
+                <div>
+                    <h3 style="color: #4ecdc4; margin-bottom: 8px;">Active Pokemon</h3>
+                    <div class="pokemon-slot active" id="active-pokemon">
+                        <div class="pokemon-header">
+                            <span class="pokemon-name" id="active-name">-</span>
+                            <span class="pokemon-level" id="active-level">Lv -</span>
+                        </div>
+                        <div class="pokemon-species" id="active-species">-</div>
+                        <div class="stat-row">
+                            <span class="stat-label">Party Position:</span>
+                            <span class="stat-value" id="active-position">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    class PokemonGameHookClient {
+        constructor() {
+            this.baseUrl = window.location.protocol === 'file:'
+                ? 'http://localhost:8080'
+                : window.location.origin;
+            this.wsUrl = this.baseUrl.replace('http', 'ws') + '/api/stream';
+            this.connected = false;
+            this.ws = null;
+            this.data = {};
+
+            // Pokemon species mapping from actual Pokemon Red/Blue memory
+            this.pokemonSpecies = {
+                0: "",
+                1: "Rhydon", 2: "Kangaskhan", 3: "NidoranM", 4: "Clefairy", 5: "Spearow",
+                6: "Voltorb", 7: "Nidoking", 8: "Slowbro", 9: "Ivysaur", 10: "Exeggutor",
+                11: "Lickitung", 12: "Exeggcute", 13: "Grimer", 14: "Gengar", 15: "NidoranF",
+                16: "Nidoqueen", 17: "Cubone", 18: "Rhyhorn", 19: "Lapras", 20: "Arcanine",
+                21: "Mew", 22: "Gyarados", 23: "Shellder", 24: "Tentacool", 25: "Gastly",
+                26: "Scyther", 27: "Staryu", 28: "Blastoise", 29: "Pinsir", 30: "Tangela",
+                33: "Growlithe", 34: "Onix", 35: "Fearow", 36: "Pidgey", 37: "Slowpoke",
+                38: "Kadabra", 39: "Graveler", 40: "Chansey", 41: "Machoke", 42: "Mr. Mime",
+                43: "Hitmonlee", 44: "Hitmonchan", 45: "Arbok", 46: "Parasect", 47: "Psyduck",
+                48: "Drowzee", 49: "Golem", 51: "Magmar", 53: "Electabuzz", 54: "Magneton",
+                55: "Koffing", 57: "Mankey", 58: "Seel", 59: "Diglett", 60: "Tauros",
+                64: "Farfetch'd", 65: "Venonat", 66: "Dragonite", 70: "Doduo", 71: "Poliwag",
+                72: "Jynx", 73: "Moltres", 74: "Articuno", 75: "Zapdos", 76: "Ditto",
+                77: "Meowth", 78: "Krabby", 82: "Vulpix", 83: "Ninetales", 84: "Pikachu",
+                85: "Raichu", 88: "Dratini", 89: "Dragonair", 90: "Kabuto", 91: "Kabutops",
+                92: "Horsea", 93: "Seadra", 96: "Sandshrew", 97: "Sandslash", 98: "Omanyte",
+                99: "Omastar", 100: "Jigglypuff", 101: "Wigglytuff", 102: "Eevee", 103: "Flareon",
+                104: "Jolteon", 105: "Vaporeon", 106: "Machop", 107: "Zubat", 108: "Ekans",
+                109: "Paras", 110: "Poliwhirl", 111: "Poliwrath", 112: "Weedle", 113: "Kakuna",
+                114: "Beedrill", 116: "Dodrio", 117: "Primeape", 118: "Dugtrio", 119: "Venomoth",
+                120: "Dewgong", 123: "Caterpie", 124: "Metapod", 125: "Butterfree", 126: "Machamp",
+                128: "Golduck", 129: "Hypno", 130: "Golbat", 131: "Mewtwo", 132: "Snorlax",
+                133: "Magikarp", 136: "Muk", 138: "Kingler", 139: "Cloyster", 141: "Electrode",
+                142: "Clefable", 143: "Weezing", 144: "Persian", 145: "Marowak", 147: "Haunter",
+                148: "Abra", 149: "Alakazam", 150: "Pidgeotto", 151: "Pidgeot", 152: "Starmie",
+                153: "Bulbasaur", 154: "Venusaur", 155: "Tentacruel", 157: "Goldeen", 158: "Seaking",
+                163: "Ponyta", 164: "Rapidash", 165: "Rattata", 166: "Raticate", 167: "Nidorino",
+                168: "Nidorina", 169: "Geodude", 170: "Porygon", 171: "Aerodactyl", 173: "Magnemite",
+                176: "Charmander", 177: "Squirtle", 178: "Charmeleon", 179: "Wartortle", 180: "Charizard",
+                185: "Oddish", 186: "Gloom", 187: "Vileplume", 188: "Bellsprout", 189: "Weepinbell", 190: "Victreebel"
+            };
+
+            this.battleTypes = {
+                0: "None", 1: "Wild", 2: "Trainer", 255: "Lost Battle"
+            };
+
+            this.connect();
+            this.loadMapper();
+        }
+
+        async loadMapper() {
+            try {
+                // Assuming pokemon mapper is at gameboy/pokemon_red
+                const response = await fetch(`${this.baseUrl}/api/mappers/pokemon_red_blue/load`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    console.log('Pokemon mapper loaded successfully');
+                    this.updateStatus('connected', 'Connected');
+                    this.updateAllData();
+                } else {
+                    console.error('Failed to load Pokemon mapper');
+                    this.updateStatus('disconnected', 'Mapper Failed');
+                }
+            } catch (error) {
+                console.error('Error loading mapper:', error);
+                this.updateStatus('disconnected', 'Connection Failed');
+            }
+        }
+
+        connect() {
+            this.updateStatus('loading', 'Connecting...');
+
+            try {
+                this.ws = new WebSocket(this.wsUrl);
+
+                this.ws.onopen = () => {
+                    this.connected = true;
+                    console.log('WebSocket connected');
+                };
+
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleMessage(data);
+                };
+
+                this.ws.onclose = () => {
+                    this.connected = false;
+                    this.updateStatus('disconnected', 'Disconnected');
+                    console.log('WebSocket disconnected');
+
+                    // Reconnect after 3 seconds
+                    setTimeout(() => this.connect(), 3000);
+                };
+
+                this.ws.onerror = (error) => {
+                    this.updateStatus('disconnected', 'Error');
+                    console.error('WebSocket error:', error);
+                };
+            } catch (error) {
+                this.updateStatus('disconnected', 'Connection Failed');
+                console.error('WebSocket connection failed:', error);
+                setTimeout(() => this.connect(), 3000);
+            }
+        }
+
+        handleMessage(data) {
+            if (data.type === 'property_changed') {
+                this.data[data.property] = data.value;
+                this.updateDisplay();
+            }
+        }
+
+        async updateAllData() {
+            const properties = [
+                'playerName', 'teamCount',
+                'pokemon0Nickname', 'pokemon0Species', 'pokemon0Level', 'pokemon0Hp', 'pokemon0MaxHp',
+                'pokemon1Nickname', 'pokemon1Species', 'pokemon1Level', 'pokemon1Hp', 'pokemon1MaxHp',
+                'battleType', 'activePokemonSlot', 'activePokemonSpecies', 'activePokemonLevel',
+                'money', 'rivalName', 'currentMap', 'badges'
+            ];
+
+            for (const prop of properties) {
+                try {
+                    const response = await fetch(`${this.baseUrl}/api/properties/${prop}`);
+                    if (response.ok) {
+                        const result = await response.json();
+                        this.data[prop] = result.value;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching ${prop}:`, error);
+                }
+            }
+
+            this.updateDisplay();
+        }
+
+        updateDisplay() {
+            this.updateTrainerInfo();
+            this.updatePartyPokemon();
+            this.updateBattleStatus();
+            this.updateGameStats();
+        }
+
+        updateTrainerInfo() {
+            const trainerName = this.data['playerName'] || 'Unknown Trainer';
+            const teamCount = this.data['teamCount'] || 0;
+
+            document.getElementById('trainer-name').textContent = trainerName;
+            document.getElementById('party-count').textContent = `Party: ${teamCount}/6`;
+        }
+
+        updatePartyPokemon() {
+            const partyContainer = document.getElementById('party-pokemon');
+            const teamCount = this.data['teamCount'] || 0;
+
+            if (teamCount === 0) {
+                partyContainer.innerHTML = '<div class="empty-state">No Pokemon in party</div>';
+                return;
+            }
+
+            let html = '';
+            for (let i = 0; i < 6; i++) {
+                // Only show first 2 slots for now (can be extended)
+                if (i >= 2) {
+                    if (i < teamCount) {
+                        html += `
+                                <div class="pokemon-slot">
+                                    <div class="pokemon-header">
+                                        <span class="pokemon-name">Pokemon ${i + 1}</span>
+                                        <span class="pokemon-level">Lv ?</span>
+                                    </div>
+                                    <div class="pokemon-species">More slots available...</div>
+                                </div>
+                            `;
+                    }
+                    continue;
+                }
+
+                const nickname = this.data[`pokemon${i}Nickname`] || `Pokemon ${i + 1}`;
+                const species = this.data[`pokemon${i}Species`];
+                const level = this.data[`pokemon${i}Level`] || 1;
+                const hp = this.data[`pokemon${i}Hp`] || 0;
+                const maxHp = this.data[`pokemon${i}MaxHp`] || 1;
+
+                const isEmpty = i >= teamCount;
+                const speciesName = this.pokemonSpecies[species] || `#${species || '???'}`;
+                const hpPercent = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+                const hpClass = hpPercent > 75 ? 'hp-high' :
+                    hpPercent > 50 ? 'hp-medium' :
+                        hpPercent > 25 ? 'hp-low' : 'hp-critical';
+
+                html += `
+                        <div class="pokemon-slot ${isEmpty ? 'empty' : ''}">
+                            <div class="pokemon-header">
+                                <span class="pokemon-name">${isEmpty ? 'Empty' : nickname}</span>
+                                <span class="pokemon-level">Lv ${level}</span>
+                            </div>
+                            ${!isEmpty ? `
+                                <div class="pokemon-species">${speciesName}</div>
+                                <div class="hp-bar">
+                                    <div class="hp-fill ${hpClass}" style="width: ${hpPercent}%"></div>
+                                </div>
+                                <div class="hp-text">${hp}/${maxHp} HP</div>
+                            ` : ''}
+                        </div>
+                    `;
+            }
+
+            partyContainer.innerHTML = html;
+        }
+
+        updateBattleStatus() {
+            const battleType = this.data['battleType'] || 0;
+            const battleTypeName = this.battleTypes[battleType] || 'Unknown';
+            const statusElement = document.getElementById('battle-status');
+            const battlePokemonElement = document.getElementById('battle-pokemon');
+
+            // Update battle status - normalize class name for CSS
+            const cssClass = battleTypeName.toLowerCase().replace(' ', '-');
+            statusElement.className = `battle-status battle-${cssClass}`;
+
+            if (battleType === 0) {
+                statusElement.textContent = 'Not in battle';
+                battlePokemonElement.style.display = 'none';
+            } else {
+                statusElement.textContent = `${battleTypeName}`;
+                battlePokemonElement.style.display = 'block';
+
+                // Update active Pokemon info
+                const activeSpecies = this.data['activePokemonSpecies'];
+                const activeLevel = this.data['activePokemonLevel'] || 1;
+                const activePosition = this.data['activePokemonSlot'] || 0;
+                const activeSpeciesName = this.pokemonSpecies[activeSpecies] || `#${activeSpecies || '???'}`;
+
+                // Get nickname from party slot
+                const activeNickname = this.data[`pokemon${activePosition}Nickname`] || activeSpeciesName;
+
+                document.getElementById('active-name').textContent = activeNickname;
+                document.getElementById('active-level').textContent = `Lv ${activeLevel}`;
+                document.getElementById('active-species').textContent = activeSpeciesName;
+                document.getElementById('active-position').textContent = `Slot ${activePosition + 1}`;
+            }
+        }
+
+        updateGameStats() {
+            const money = this.data['money'] || 0;
+            const badges = this.data['badges'] || 0;
+            const currentMap = this.data['currentMap'] || 0;
+            const rivalName = this.data['rivalName'] || 'Unknown';
+
+            // Count badges (count set bits in badges byte)
+            const badgeCount = badges ? badges.toString(2).split('1').length - 1 : 0;
+
+            document.getElementById('money').textContent = `${money.toLocaleString()}`;
+            document.getElementById('badges').textContent = `${badgeCount}/8`;
+            document.getElementById('current-map').textContent = `#${currentMap}`;
+            document.getElementById('rival-name').textContent = rivalName;
+        }
+
+        updateStatus(className, text) {
+            const status = document.getElementById('status');
+            status.className = `connection-status ${className}`;
+            status.textContent = text;
+        }
+    }
+
+    // Initialize when page loads
+    window.addEventListener('DOMContentLoaded', () => {
+        window.pokemonClient = new PokemonGameHookClient();
+    });
+
+    // Refresh data every 2 seconds as fallback
+    setInterval(() => {
+        if (window.pokemonClient && window.pokemonClient.connected) {
+            window.pokemonClient.updateAllData();
+        }
+    }, 2000);
+</script>
+</body>
+</html>
