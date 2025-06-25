@@ -162,7 +162,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
     <div class="container">
-        <h1>🎮 GameHook Go</h1>
+        <h1>GameHook Go</h1>
         <p>A modern retro game memory manipulation tool built with Go and CUE.</p>
         
         <div class="section">
