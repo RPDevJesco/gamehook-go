@@ -4,13 +4,33 @@ name: "pokemon_red_blue"
 game: "Pokemon Red/Blue"
 
 platform: {
-	name: "Game Boy"
-	endian: "little"
-	memoryBlocks: [{
-		name: "WRAM"
-		start: "0xC000"
-		end: "0xDFFF"
-	}]
+    name: "Game Boy"
+    endian: "little"
+    memoryBlocks: [
+        // Priority 1: WRAM - All Pokemon data is here
+        {
+            name: "WRAM Bank 0"
+            start: "0xC000"
+            end: "0xCFFF"
+        },
+        {
+            name: "WRAM Bank 1"
+            start: "0xD000"
+            end: "0xDFFF"
+        },
+        // Priority 2: Other areas (may not be accessible)
+        // Comment these out initially to test:
+        // {
+        //     name: "VRAM"
+        //     start: "0x8000"
+        //     end: "0x9FFF"
+        // },
+        // {
+        //     name: "External RAM"
+        //     start: "0xA000"
+        //     end: "0xBFFF"
+        // }
+    ]
 }
 
 properties: {
@@ -21,6 +41,7 @@ properties: {
 		address: "0xD158"
 		length: 11
 		description: "Player's name"
+		charMap: #PokemonCharMap
 	}
 
 	teamCount: {
@@ -197,7 +218,7 @@ properties: {
 
 	money: {
 		name: "money"
-		type: "uint32"
+		type: "bcd"
 		address: "0xD347"
 		length: 3
 		description: "Player's money"
@@ -239,4 +260,73 @@ properties: {
 		address: "0xD356"
 		description: "Badge bitfield"
 	}
+
+	#PokemonCharMap: {
+    "0x50": " "
+    "0x80": "A"
+    "0x81": "B"
+    "0x82": "C"
+    "0x83": "D"
+    "0x84": "E"
+    "0x85": "F"
+    "0x86": "G"
+    "0x87": "H"
+    "0x88": "I"
+    "0x89": "J"
+    "0x8A": "K"
+    "0x8B": "L"
+    "0x8C": "M"
+    "0x8D": "N"
+    "0x8E": "O"
+    "0x8F": "P"
+    "0x90": "Q"
+    "0x91": "R"
+    "0x92": "S"
+    "0x93": "T"
+    "0x94": "U"
+    "0x95": "V"
+    "0x96": "W"
+    "0x97": "X"
+    "0x98": "Y"
+    "0x99": "Z"
+    "0x9A": "("
+    "0x9B": ")"
+    "0x9C": ":"
+    "0x9D": ";"
+    "0xA0": "a"
+    "0xA1": "b"
+    "0xA2": "c"
+    "0xA3": "d"
+    "0xA4": "e"
+    "0xA5": "f"
+    "0xA6": "g"
+    "0xA7": "h"
+    "0xA8": "i"
+    "0xA9": "j"
+    "0xAA": "k"
+    "0xAB": "l"
+    "0xAC": "m"
+    "0xAD": "n"
+    "0xAE": "o"
+    "0xAF": "p"
+    "0xB0": "q"
+    "0xB1": "r"
+    "0xB2": "s"
+    "0xB3": "t"
+    "0xB4": "u"
+    "0xB5": "v"
+    "0xB6": "w"
+    "0xB7": "x"
+    "0xB8": "y"
+    "0xB9": "z"
+    "0xE1": "P"  // Pokemon abbreviation
+    "0xE2": "K"  // Pokemon abbreviation
+    "0xE3": "M"  // Pokemon abbreviation
+    "0xE4": "N"  // Pokemon abbreviation
+    "0xE6": "r"  // Pokemon abbreviation
+    "0xE7": "m"  // Pokemon abbreviation
+    "0xF7": "♂"  // Male symbol
+    "0xF8": "♀"  // Female symbol
+    "0xFF": "?"  // Terminator/Unknown
+}
 }

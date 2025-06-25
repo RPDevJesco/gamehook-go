@@ -334,6 +334,7 @@ func (gh *GameHook) updateLoop() {
 	defer ticker.Stop()
 
 	lastErrorLog := time.Time{}
+	consecutiveErrors := 0
 
 	for {
 		select {
@@ -342,10 +343,18 @@ func (gh *GameHook) updateLoop() {
 		case <-ticker.C:
 			if gh.currentMapper != nil {
 				if err := gh.updateMemory(); err != nil {
-					// Only log errors occasionally to avoid spam
-					if time.Since(lastErrorLog) > 30*time.Second {
-						log.Printf("⚠️  Memory update error (RetroArch connected?): %v", err)
+					consecutiveErrors++
+
+					// Only log errors occasionally to avoid spam, but log first error immediately
+					if consecutiveErrors == 1 || time.Since(lastErrorLog) > 30*time.Second {
+						log.Printf("⚠️  Memory update error (RetroArch connected? Game loaded?): %v", err)
 						lastErrorLog = time.Now()
+					}
+				} else {
+					// Reset error counter on successful read
+					if consecutiveErrors > 0 {
+						log.Printf("✅ RetroArch connection restored")
+						consecutiveErrors = 0
 					}
 				}
 			}
@@ -355,19 +364,21 @@ func (gh *GameHook) updateLoop() {
 
 // updateMemory reads memory from the driver and updates the memory manager
 func (gh *GameHook) updateMemory() error {
-	// Only try to connect if we haven't been connected recently
-	if err := gh.driver.Connect(); err != nil {
-		// Don't spam error logs - RetroArch might not be running
-		return nil
+	if gh.currentMapper == nil {
+		return nil // No mapper loaded, nothing to do
 	}
-	defer gh.driver.Close()
 
+	// The new driver handles connection internally, so we don't need to connect/close each time
 	memoryData, err := gh.driver.ReadMemoryBlocks(gh.currentMapper.Platform.MemoryBlocks)
 	if err != nil {
 		return fmt.Errorf("memory read failed: %w", err)
 	}
 
 	gh.memory.Update(memoryData)
+
+	// Optionally log successful reads (remove this in production)
+	// log.Printf("Successfully read %d memory blocks", len(memoryData))
+
 	return nil
 }
 
@@ -386,6 +397,12 @@ func (gh *GameHook) LoadMapper(name string) error {
 	return nil
 }
 
+// Update the GameHook implementation
+func (gh *GameHook) GetCurrentMapperFull() *mappers.Mapper {
+	return gh.currentMapper // Return the actual mapper object
+}
+
+// Keep the existing method for simple info (backward compatibility)
 func (gh *GameHook) GetCurrentMapper() interface{} {
 	if gh.currentMapper == nil {
 		return nil

@@ -438,6 +438,8 @@ func (m *Mapper) GetProperty(name string, memManager *memory.Manager) (interface
 		rawValue, err = memManager.ReadInt16(prop.Address, littleEndian)
 	case "int32":
 		rawValue, err = memManager.ReadInt32(prop.Address, littleEndian)
+	case "bcd":
+		rawValue, err = memManager.ReadBCD(prop.Address, prop.Length)
 	case "bool":
 		rawValue, err = memManager.ReadBool(prop.Address)
 	case "string":

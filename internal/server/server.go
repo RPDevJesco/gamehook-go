@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gamehook/internal/mappers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"log"
@@ -14,7 +15,8 @@ import (
 // GameHookAPI interface for the server to interact with the main application
 type GameHookAPI interface {
 	LoadMapper(name string) error
-	GetCurrentMapper() interface{}
+	GetCurrentMapper() interface{}         // Keep for compatibility
+	GetCurrentMapperFull() *mappers.Mapper // Add new method for full access
 	GetProperty(name string) (interface{}, error)
 	SetProperty(name string, value interface{}) error
 	ListMappers() []string
@@ -104,6 +106,8 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/properties", s.handleListProperties).Methods("GET")
 	api.HandleFunc("/properties/{name}", s.handleGetProperty).Methods("GET")
 	api.HandleFunc("/properties/{name}", s.handleSetProperty).Methods("PUT")
+	api.HandleFunc("/debug/mapper", s.handleMapperDebug).Methods("GET")
+	api.HandleFunc("/debug/properties", s.handleListProperties).Methods("GET")
 
 	// Raw memory access
 	api.HandleFunc("/memory/{address}/{length}", s.handleReadMemory).Methods("GET")
@@ -232,19 +236,60 @@ func (s *Server) handleListProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// This would need to be implemented based on the actual mapper structure
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Properties list would go here",
-	})
+	// Known Pokemon Red/Blue properties from the CUE file
+	pokemonProperties := []string{
+		"playerName", "teamCount", "pokemon0Nickname", "pokemon0Species",
+		"pokemon0Level", "pokemon0Hp", "pokemon0MaxHp", "pokemon1Nickname",
+		"pokemon1Species", "pokemon1Level", "pokemon1Hp", "pokemon1MaxHp",
+		"battleType", "activePokemonSlot", "activePokemonSpecies",
+		"activePokemonLevel", "money", "rivalName", "currentMap", "badges",
+	}
+
+	properties := make([]map[string]interface{}, 0)
+
+	for _, name := range pokemonProperties {
+		// Test each property individually
+		value, err := s.gameHook.GetProperty(name)
+
+		property := map[string]interface{}{
+			"name": name,
+		}
+
+		if err != nil {
+			property["error"] = err.Error()
+			property["available"] = false
+		} else {
+			property["value"] = value
+			property["available"] = true
+		}
+
+		properties = append(properties, property)
+	}
+
+	response := map[string]interface{}{
+		"properties": properties,
+		"total":      len(properties),
+		"available":  len(properties), // We'll count successful ones
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) handleGetProperty(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	name := vars["name"]
 
+	// Check if mapper is loaded
+	mapper := s.gameHook.GetCurrentMapper()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper currently loaded")
+		return
+	}
+
+	// Use the existing GetProperty method
 	value, err := s.gameHook.GetProperty(name)
 	if err != nil {
-		s.writeError(w, http.StatusNotFound, "PROPERTY_NOT_FOUND", err.Error())
+		s.writeError(w, http.StatusBadRequest, "PROPERTY_ERROR", err.Error())
 		return
 	}
 
@@ -344,6 +389,23 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("WebSocket client disconnected")
+}
+
+func (s *Server) handleMapperDebug(w http.ResponseWriter, r *http.Request) {
+	mapper := s.gameHook.GetCurrentMapper()
+	if mapper == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "No mapper loaded",
+		})
+		return
+	}
+
+	// Debug the actual mapper structure
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"loaded":  true,
+		"type":    fmt.Sprintf("%T", mapper),
+		"details": mapper,
+	})
 }
 
 // Helper functions

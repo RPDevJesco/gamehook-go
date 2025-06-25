@@ -118,6 +118,21 @@ func (m *Manager) ReadBool(address uint32) (bool, error) {
 	return val != 0, err
 }
 
+// ReadBCD reads Binary Coded Decimal values (used in Pokemon games)
+func (m *Manager) ReadBCD(address uint32, length uint32) (uint32, error) {
+	data, err := m.ReadBytes(address, length)
+	if err != nil {
+		return 0, err
+	}
+
+	result := uint32(0)
+	for _, bcd := range data {
+		result *= 100
+		result += uint32(10*(bcd>>4) + (bcd & 0x0F))
+	}
+	return result, nil
+}
+
 // ReadString reads a null-terminated string with character mapping
 func (m *Manager) ReadString(address uint32, maxLength uint32, charMap map[uint8]string) (string, error) {
 	data, err := m.ReadBytes(address, maxLength)
