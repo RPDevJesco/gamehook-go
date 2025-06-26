@@ -8,25 +8,77 @@ import (
 	"time"
 )
 
-// RetroArchDriver implements the Driver interface for RetroArch
-type RetroArchDriver struct {
+// AdaptiveRetroArchDriver automatically chunks large reads while maintaining performance
+type AdaptiveRetroArchDriver struct {
 	host           string
 	port           int
 	requestTimeout time.Duration
 	conn           *net.UDPConn
+
+	// Adaptive chunking parameters
+	maxChunkSize  uint32 // Maximum bytes to read in one request
+	bufferSize    int    // Socket buffer size
+	testChunkSize uint32 // Size to test for optimal chunk size
 }
 
-// NewRetroArchDriver creates a new RetroArch driver
-func NewRetroArchDriver(host string, port int, requestTimeout time.Duration) *RetroArchDriver {
-	return &RetroArchDriver{
+// Platform-specific configurations
+var platformConfigs = map[string]struct {
+	maxChunkSize uint32
+	bufferSize   int
+}{
+	// Game Boy variants
+	"GB":       {maxChunkSize: 1024, bufferSize: 64 * 1024},
+	"GAME BOY": {maxChunkSize: 1024, bufferSize: 64 * 1024},
+	"GBC":      {maxChunkSize: 1024, bufferSize: 64 * 1024},
+	"GAMEBOY":  {maxChunkSize: 1024, bufferSize: 64 * 1024},
+
+	// Game Boy Advance variants
+	"GBA":              {maxChunkSize: 2048, bufferSize: 256 * 1024},
+	"GAME BOY ADVANCE": {maxChunkSize: 2048, bufferSize: 256 * 1024},
+
+	// Nintendo variants
+	"NES":            {maxChunkSize: 1024, bufferSize: 64 * 1024},
+	"NINTENDO":       {maxChunkSize: 1024, bufferSize: 64 * 1024},
+	"SNES":           {maxChunkSize: 2048, bufferSize: 128 * 1024},
+	"SUPER NINTENDO": {maxChunkSize: 2048, bufferSize: 128 * 1024},
+
+	// Nintendo DS variants
+	"NDS":          {maxChunkSize: 4096, bufferSize: 2 * 1024 * 1024},
+	"NINTENDO DS":  {maxChunkSize: 4096, bufferSize: 2 * 1024 * 1024},
+	"DSI":          {maxChunkSize: 8192, bufferSize: 4 * 1024 * 1024},
+	"NINTENDO DSI": {maxChunkSize: 8192, bufferSize: 4 * 1024 * 1024},
+}
+
+// NewAdaptiveRetroArchDriver creates a new adaptive RetroArch driver
+func NewAdaptiveRetroArchDriver(host string, port int, requestTimeout time.Duration) *AdaptiveRetroArchDriver {
+	return &AdaptiveRetroArchDriver{
 		host:           host,
 		port:           port,
 		requestTimeout: requestTimeout,
+		maxChunkSize:   2048,        // Default safe chunk size
+		bufferSize:     1024 * 1024, // Default 1MB buffer
+		testChunkSize:  1024,        // Start testing with 1KB
 	}
 }
 
-// Connect establishes connection to RetroArch
-func (d *RetroArchDriver) Connect() error {
+// SetPlatform configures optimal settings for a specific platform
+func (d *AdaptiveRetroArchDriver) SetPlatform(platform string) {
+	// Normalize platform name (uppercase, trim spaces)
+	normalizedPlatform := strings.ToUpper(strings.TrimSpace(platform))
+
+	if config, exists := platformConfigs[normalizedPlatform]; exists {
+		d.maxChunkSize = config.maxChunkSize
+		d.bufferSize = config.bufferSize
+		fmt.Printf("🎮 Configured for %s: chunk_size=%d, buffer_size=%d\n",
+			platform, d.maxChunkSize, d.bufferSize)
+	} else {
+		fmt.Printf("⚠️  Unknown platform '%s', using defaults (chunk_size=%d, buffer_size=%d)\n",
+			platform, d.maxChunkSize, d.bufferSize)
+	}
+}
+
+// Connect establishes connection to RetroArch and auto-detects optimal settings
+func (d *AdaptiveRetroArchDriver) Connect() error {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", d.host, d.port))
 	if err != nil {
 		return fmt.Errorf("failed to resolve UDP address: %w", err)
@@ -37,25 +89,19 @@ func (d *RetroArchDriver) Connect() error {
 		return fmt.Errorf("failed to connect to RetroArch: %w", err)
 	}
 
-	// Set larger buffer sizes to handle large memory blocks
-	// Game Boy WRAM can be up to 8KB, plus overhead
-	const bufferSize = 64 * 1024 // 64KB should be more than enough
-
-	if err := conn.SetReadBuffer(bufferSize); err != nil {
-		conn.Close()
-		return fmt.Errorf("failed to set read buffer size: %w", err)
+	// Set buffer sizes based on platform
+	if err := conn.SetReadBuffer(d.bufferSize); err != nil {
+		fmt.Printf("⚠️  Warning: failed to set read buffer to %d: %v\n", d.bufferSize, err)
 	}
 
-	if err := conn.SetWriteBuffer(bufferSize); err != nil {
-		conn.Close()
-		return fmt.Errorf("failed to write buffer size: %w", err)
+	if err := conn.SetWriteBuffer(d.bufferSize); err != nil {
+		fmt.Printf("⚠️  Warning: failed to set write buffer to %d: %v\n", d.bufferSize, err)
 	}
 
 	d.conn = conn
 
-	// Test connection with a simple command
-	_, err = d.sendCommand("VERSION")
-	if err != nil {
+	// Test connection and auto-detect optimal chunk size
+	if err := d.testConnection(); err != nil {
 		d.conn.Close()
 		d.conn = nil
 		return fmt.Errorf("failed to communicate with RetroArch: %w", err)
@@ -64,8 +110,53 @@ func (d *RetroArchDriver) Connect() error {
 	return nil
 }
 
+// testConnection tests the connection and finds optimal chunk size
+func (d *AdaptiveRetroArchDriver) testConnection() error {
+	// First, test basic connectivity
+	_, err := d.sendCommand("VERSION")
+	if err != nil {
+		return fmt.Errorf("basic connectivity test failed: %w", err)
+	}
+
+	// Try to auto-detect optimal chunk size by testing progressively larger reads
+	fmt.Print("🔍 Auto-detecting optimal chunk size... ")
+
+	testSizes := []uint32{512, 1024, 2048, 4096, 8192, 16384}
+	optimalSize := uint32(512)    // Fallback to very safe size
+	platformMax := d.maxChunkSize // Remember platform-configured maximum
+
+	for _, size := range testSizes {
+		// Don't test sizes larger than platform maximum unless platform max is very small
+		if size > platformMax && platformMax >= 1024 {
+			break
+		}
+
+		// Test reading a small chunk at address 0
+		command := fmt.Sprintf("READ_CORE_MEMORY 0 %d", size)
+		_, err := d.sendCommand(command)
+
+		if err != nil {
+			// If this size fails, stop and use the previous working size
+			break
+		}
+
+		optimalSize = size
+	}
+
+	// Use the smaller of: detected optimal size or platform maximum
+	if optimalSize > platformMax && platformMax >= 512 {
+		fmt.Printf("optimal chunk size: %d bytes (limited by platform config: %d)\n", platformMax, optimalSize)
+		d.maxChunkSize = platformMax
+	} else {
+		fmt.Printf("optimal chunk size: %d bytes\n", optimalSize)
+		d.maxChunkSize = optimalSize
+	}
+
+	return nil
+}
+
 // ReadMemoryBlocks reads multiple memory blocks from RetroArch
-func (d *RetroArchDriver) ReadMemoryBlocks(blocks []MemoryBlock) (map[uint32][]byte, error) {
+func (d *AdaptiveRetroArchDriver) ReadMemoryBlocks(blocks []MemoryBlock) (map[uint32][]byte, error) {
 	if d.conn == nil {
 		if err := d.Connect(); err != nil {
 			return nil, err
@@ -85,12 +176,53 @@ func (d *RetroArchDriver) ReadMemoryBlocks(blocks []MemoryBlock) (map[uint32][]b
 	return result, nil
 }
 
-// ReadMemory reads memory from a specific address
-func (d *RetroArchDriver) ReadMemory(address uint32, length uint32) ([]byte, error) {
+// ReadMemory reads memory using adaptive chunking
+func (d *AdaptiveRetroArchDriver) ReadMemory(address uint32, length uint32) ([]byte, error) {
 	if d.conn == nil {
 		return nil, fmt.Errorf("not connected to RetroArch")
 	}
 
+	// For small reads, try single request first
+	if length <= d.maxChunkSize {
+		data, err := d.readChunk(address, length)
+		if err == nil {
+			return data, nil
+		}
+		// If single request fails, fall back to chunking
+		fmt.Printf("⚠️  Single read failed for %d bytes, falling back to chunking\n", length)
+	}
+
+	// Use chunked reading for large requests or when single read fails
+	return d.readChunked(address, length)
+}
+
+// readChunked reads memory in chunks
+func (d *AdaptiveRetroArchDriver) readChunked(address uint32, length uint32) ([]byte, error) {
+	result := make([]byte, 0, length)
+	remaining := length
+	currentAddr := address
+
+	for remaining > 0 {
+		chunkSize := d.maxChunkSize
+		if remaining < chunkSize {
+			chunkSize = remaining
+		}
+
+		chunk, err := d.readChunk(currentAddr, chunkSize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read chunk at 0x%X: %w", currentAddr, err)
+		}
+
+		result = append(result, chunk...)
+		currentAddr += chunkSize
+		remaining -= chunkSize
+	}
+
+	return result, nil
+}
+
+// readChunk reads a single chunk of memory
+func (d *AdaptiveRetroArchDriver) readChunk(address uint32, length uint32) ([]byte, error) {
 	// Convert address to hex string (RetroArch expects lowercase hex without 0x prefix)
 	addrStr := fmt.Sprintf("%x", address)
 
@@ -132,11 +264,46 @@ func (d *RetroArchDriver) ReadMemory(address uint32, length uint32) ([]byte, err
 }
 
 // WriteBytes writes bytes to RetroArch
-func (d *RetroArchDriver) WriteBytes(address uint32, data []byte) error {
+func (d *AdaptiveRetroArchDriver) WriteBytes(address uint32, data []byte) error {
 	if d.conn == nil {
 		return fmt.Errorf("not connected to RetroArch")
 	}
 
+	// For large writes, chunk them too
+	if len(data) > int(d.maxChunkSize) {
+		return d.writeChunked(address, data)
+	}
+
+	return d.writeChunk(address, data)
+}
+
+// writeChunked writes data in chunks
+func (d *AdaptiveRetroArchDriver) writeChunked(address uint32, data []byte) error {
+	remaining := len(data)
+	currentAddr := address
+	offset := 0
+
+	for remaining > 0 {
+		chunkSize := int(d.maxChunkSize)
+		if remaining < chunkSize {
+			chunkSize = remaining
+		}
+
+		chunk := data[offset : offset+chunkSize]
+		if err := d.writeChunk(currentAddr, chunk); err != nil {
+			return fmt.Errorf("failed to write chunk at 0x%X: %w", currentAddr, err)
+		}
+
+		currentAddr += uint32(chunkSize)
+		remaining -= chunkSize
+		offset += chunkSize
+	}
+
+	return nil
+}
+
+// writeChunk writes a single chunk
+func (d *AdaptiveRetroArchDriver) writeChunk(address uint32, data []byte) error {
 	// Convert bytes to hex strings
 	hexBytes := make([]string, len(data))
 	for i, b := range data {
@@ -152,7 +319,7 @@ func (d *RetroArchDriver) WriteBytes(address uint32, data []byte) error {
 }
 
 // Close closes the connection
-func (d *RetroArchDriver) Close() error {
+func (d *AdaptiveRetroArchDriver) Close() error {
 	if d.conn != nil {
 		err := d.conn.Close()
 		d.conn = nil
@@ -162,7 +329,7 @@ func (d *RetroArchDriver) Close() error {
 }
 
 // sendCommand sends a command to RetroArch and returns the response
-func (d *RetroArchDriver) sendCommand(command string) (string, error) {
+func (d *AdaptiveRetroArchDriver) sendCommand(command string) (string, error) {
 	if d.conn == nil {
 		return "", fmt.Errorf("not connected")
 	}
@@ -178,8 +345,13 @@ func (d *RetroArchDriver) sendCommand(command string) (string, error) {
 		return "", fmt.Errorf("failed to send command: %w", err)
 	}
 
-	// Read response with larger buffer
-	buffer := make([]byte, 65536) // 64KB buffer for large responses
+	// Read response with platform-appropriate buffer
+	bufferSize := 32 * 1024 // 32KB default for responses
+	if d.maxChunkSize > 1024 {
+		bufferSize = int(d.maxChunkSize) * 4 // Scale buffer with chunk size
+	}
+
+	buffer := make([]byte, bufferSize)
 	n, err := d.conn.Read(buffer)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)

@@ -89,7 +89,7 @@ func createTestCommands() []*cobra.Command {
 			port, _ := cmd.Root().Flags().GetInt("retroarch-port")
 			timeout, _ := cmd.Root().Flags().GetDuration("request-timeout")
 
-			driver := drivers.NewRetroArchDriver(host, port, timeout)
+			driver := drivers.NewAdaptiveRetroArchDriver(host, port, timeout)
 
 			fmt.Printf("Testing connection to RetroArch at %s:%d...\n", host, port)
 
@@ -257,7 +257,7 @@ func NewGameHook(cfg *config.Config) (*GameHook, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create driver
-	driver := drivers.NewRetroArchDriver(
+	driver := drivers.NewAdaptiveRetroArchDriver(
 		cfg.RetroArch.Host,
 		cfg.RetroArch.Port,
 		cfg.RetroArch.RequestTimeout,
@@ -394,6 +394,15 @@ func (gh *GameHook) LoadMapper(name string) error {
 	log.Printf("📍 Loaded mapper: %s (%s)", mapper.Name, mapper.Game)
 	log.Printf("🎮 Platform: %s (%s endian)", mapper.Platform.Name, mapper.Platform.Endian)
 	log.Printf("📊 Properties: %d defined", len(mapper.Properties))
+
+	// Configure the adaptive driver for this platform
+	if adaptiveDriver, ok := gh.driver.(*drivers.AdaptiveRetroArchDriver); ok {
+		adaptiveDriver.SetPlatform(mapper.Platform.Name)
+		log.Printf("🔧 Configured driver for platform: %s", mapper.Platform.Name)
+	} else {
+		log.Printf("⚠️  Driver is not adaptive, using default settings")
+	}
+
 	return nil
 }
 
