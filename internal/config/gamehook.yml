@@ -1,0 +1,144 @@
+# config/gamehook.yml - Default Enhanced Configuration
+
+# Server configuration
+server:
+  host: "127.0.0.1"
+  port: 8080
+  read_timeout: "30s"
+  write_timeout: "30s"
+  idle_timeout: "60s"
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+# RetroArch driver configuration
+retroarch:
+  host: "127.0.0.1"
+  port: 55355
+  request_timeout: "64ms"
+  max_retries: 3
+  retry_delay: "100ms"
+
+# BizHawk driver configuration (future support)
+bizhawk:
+  memory_map_name: "GAMEHOOK_BIZHAWK.bin"
+  data_map_name: "GAMEHOOK_BIZHAWK_DATA.bin"
+  timeout: "1s"
+
+# File paths
+paths:
+  mappers_dir: "./mappers"
+  uis_dir: "./uis"
+  data_dir: "./data"
+  log_dir: "./logs"
+  cache_dir: "./cache"
+
+# Performance settings
+performance:
+  update_interval: "16ms"        # 60 FPS property monitoring
+  max_clients: 100
+  memory_buffer_size: 1048576    # 1MB
+  websocket_buffer: 256
+  gc_target_percent: 100
+  max_memory_usage_mb: 512
+
+# Enhanced property monitoring
+property_monitoring:
+  update_interval: "16ms"        # 60 FPS monitoring
+  enable_statistics: true
+  history_size: 100000            # Keep last 100000 changes
+  change_threshold: 0.01        # Minimum change to register
+  enable_change_detection: true
+  batch_change_events: true
+  max_events_per_batch: 50
+
+# Batch operations configuration
+batch_operations:
+  max_batch_size: 50
+  timeout: "5s"
+  enable_atomic: true
+  parallel_execution: false
+  validation_mode: "strict"     # "strict", "warn", "ignore"
+
+# Property validation settings
+validation:
+  enable_strict: true
+  log_validation: true
+  fail_on_error: false
+  cache_validation_results: true
+  validation_timeout: "1s"
+  custom_validators_enabled: true
+
+# Logging configuration
+logging:
+  level: "info"                 # debug, info, warn, error, fatal
+  format: "text"                # text, json
+  output: "stdout"              # stdout, stderr, file
+  max_size: 100                 # MB
+  max_age: 7                    # days
+  max_backups: 3
+  compress: true
+
+# Feature toggles
+features:
+  metrics: true
+  profiling: false
+  auto_mapper_reload: true
+  cache_properties: true
+  background_save: false
+  memory_compression: false
+  advanced_property_types: true
+  computed_properties: true
+  property_freezing: true
+  real_time_validation: true
+  websocket_streaming: true
+
+# Security settings
+security:
+  enable_cors: true
+  allowed_origins: ["*"]
+  api_keys: []
+  rate_limit:
+    enabled: false
+    requests_per_second: 100
+    burst_size: 20
+    cleanup_interval: "1m"
+  max_websocket_connections: 50
+  enable_request_logging: false
+
+# Database settings (for future persistence features)
+database:
+  enabled: false
+  driver: "sqlite"
+  connection_string: "./data/gamehook.db"
+  max_connections: 10
+  migration_enabled: true
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  endpoint: "/metrics"
+  include_system_metrics: true
+  include_go_metrics: true
+  include_custom_metrics: true
+  export_interval: "30s"
+
+# Advanced memory management
+memory:
+  enable_compression: false
+  compression_algorithm: "gzip"  # gzip, lz4, snappy
+  cache_size_mb: 64
+  enable_memory_mapping: false
+  prefetch_enabled: true
+  memory_alignment: 4
+
+# UI configuration
+ui:
+  enable_admin_panel: true
+  enable_legacy_ui: true
+  default_theme: "dark"          # dark, light, retro
+  enable_property_editor: true
+  enable_memory_viewer: true
+  auto_refresh_interval: "1s"
+  max_property_history: 100
