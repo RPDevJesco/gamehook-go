@@ -29,7 +29,20 @@ type GameHookAPI interface {
 	GetPropertyChanges() map[string]interface{}
 	GetMapperMeta() interface{}
 	GetMapperGlossary() interface{}
+
+	// Enhanced API methods
+	GetActiveEvents() []string
+	GetRecentlyTriggeredEvents() []string
+	TriggerEvent(name string, force bool) error
+	GetValidationErrors() map[string]interface{}
 }
+
+// NOTE: Current mappers.Mapper struct has:
+// - References map[string]*Property (needs to be map[string]*ReferenceType)
+// - Events *EventsConfig (needs to be map[string]*Event)
+// - GlobalValidation field doesn't exist yet
+//
+// The handlers are designed to work with both current and future enhanced versions
 
 // Enhanced Server with property management capabilities
 type Server struct {
@@ -60,7 +73,7 @@ type PropertyChangeListener struct {
 	Callback     func(name string, oldValue, newValue interface{})
 }
 
-// PropertyResponse represents an enhanced property API response
+// Enhanced response types
 type PropertyResponse struct {
 	Name        string      `json:"name"`
 	Value       interface{} `json:"value"`
@@ -86,6 +99,34 @@ type PropertyStateResponse struct {
 	LastRead    time.Time   `json:"last_read"`
 	ReadCount   uint64      `json:"read_count"`
 	WriteCount  uint64      `json:"write_count"`
+}
+
+// Enhanced API response types
+type PropertyMetadataResponse struct {
+	Name         string                 `json:"name"`
+	Type         string                 `json:"type"`
+	Address      string                 `json:"address"`
+	Description  string                 `json:"description,omitempty"`
+	UIHints      interface{}            `json:"ui_hints,omitempty"`
+	Advanced     interface{}            `json:"advanced,omitempty"`
+	Performance  interface{}            `json:"performance,omitempty"`
+	Validation   interface{}            `json:"validation,omitempty"`
+	Dependencies []string               `json:"dependencies,omitempty"`
+	Group        string                 `json:"group,omitempty"`
+	References   map[string]interface{} `json:"references,omitempty"`
+}
+
+type ReferenceResponse struct {
+	References map[string]interface{} `json:"references"`
+	Count      int                    `json:"count"`
+	Categories []string               `json:"categories,omitempty"`
+}
+
+type EventResponse struct {
+	Events    map[string]interface{} `json:"events"`
+	Count     int                    `json:"count"`
+	Active    []string               `json:"active_events,omitempty"`
+	Triggered []string               `json:"recently_triggered,omitempty"`
 }
 
 // BatchPropertyUpdate represents a batch update request
@@ -224,6 +265,19 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/properties/{name}/bytes", s.handleSetPropertyBytes).Methods("PUT")
 	api.HandleFunc("/properties/{name}/freeze", s.handleFreezeProperty).Methods("POST")
 	api.HandleFunc("/properties/{name}/state", s.handleGetPropertyState).Methods("GET")
+
+	// Enhanced API endpoints
+	api.HandleFunc("/references", s.handleGetReferences).Methods("GET")
+	api.HandleFunc("/references/{type}", s.handleGetReferenceType).Methods("GET")
+	api.HandleFunc("/events", s.handleGetEvents).Methods("GET")
+	api.HandleFunc("/events/{name}/trigger", s.handleTriggerEvent).Methods("POST")
+	api.HandleFunc("/properties/{name}/metadata", s.handleGetPropertyMetadata).Methods("GET")
+	api.HandleFunc("/properties/{name}/ui-hints", s.handleGetPropertyUIHints).Methods("GET")
+	api.HandleFunc("/properties/by-group/{group}", s.handleGetPropertiesByGroup).Methods("GET")
+	api.HandleFunc("/ui/themes", s.handleGetUIThemes).Methods("GET")
+	api.HandleFunc("/ui/layout", s.handleGetUILayout).Methods("GET")
+	api.HandleFunc("/validation/rules", s.handleGetValidationRules).Methods("GET")
+	api.HandleFunc("/validation/errors", s.handleGetValidationErrors).Methods("GET")
 
 	// Raw memory access
 	api.HandleFunc("/memory/{address}/{length}", s.handleReadMemory).Methods("GET")
@@ -381,6 +435,19 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
             <div class="endpoint"><span class="new">NEW</span> POST /api/properties/{name}/freeze - Freeze/unfreeze property</div>
             <div class="endpoint"><span class="new">NEW</span> GET /api/properties/{name}/state - Get property state</div>
             <div class="endpoint"><span class="new">NEW</span> PUT /api/properties/batch - Batch property updates</div>
+            <div class="endpoint"><span class="new">NEW</span> GET /api/properties/{name}/metadata - Get property metadata</div>
+            <div class="endpoint"><span class="new">NEW</span> GET /api/properties/{name}/ui-hints - Get property UI hints</div>
+            <div class="endpoint"><span class="new">NEW</span> GET /api/properties/by-group/{group} - Get properties by group</div>
+            
+            <h3>Enhanced Features</h3>
+            <div class="endpoint"><span class="new">NEW</span> GET <a href="/api/references">/api/references</a> - Get reference types</div>
+            <div class="endpoint"><span class="new">NEW</span> GET /api/references/{type} - Get specific reference type</div>
+            <div class="endpoint"><span class="new">NEW</span> GET <a href="/api/events">/api/events</a> - Get events</div>
+            <div class="endpoint"><span class="new">NEW</span> POST /api/events/{name}/trigger - Trigger event</div>
+            <div class="endpoint"><span class="new">NEW</span> GET <a href="/api/ui/themes">/api/ui/themes</a> - Get UI themes</div>
+            <div class="endpoint"><span class="new">NEW</span> GET <a href="/api/ui/layout">/api/ui/layout</a> - Get UI layout</div>
+            <div class="endpoint"><span class="new">NEW</span> GET <a href="/api/validation/rules">/api/validation/rules</a> - Get validation rules</div>
+            <div class="endpoint"><span class="new">NEW</span> GET <a href="/api/validation/errors">/api/validation/errors</a> - Get validation errors</div>
             
             <h3>Real-time Communication</h3>
             <div class="endpoint">WS /api/stream - Enhanced WebSocket for real-time updates</div>
@@ -396,6 +463,9 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
                 <li><strong>Property Validation:</strong> Enforce constraints and rules</li>
                 <li><strong>State Tracking:</strong> Monitor read/write counts and history</li>
                 <li><strong>Property Groups:</strong> Organize properties for better UX</li>
+                <li><strong>Reference Types:</strong> Enum and structured data support</li>
+                <li><strong>Event System:</strong> Trigger-based automation</li>
+                <li><strong>UI Hints:</strong> Rich metadata for enhanced interfaces</li>
             </ul>
         </div>
         
@@ -408,6 +478,360 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 </body>
 </html>
 	`)
+}
+
+// Enhanced API endpoint handlers
+
+func (s *Server) handleGetReferences(w http.ResponseWriter, r *http.Request) {
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	// Build categories list and convert to interface{}
+	categories := make([]string, 0)
+	referencesMap := make(map[string]interface{})
+
+	if mapper.References != nil {
+		for refType, refData := range mapper.References {
+			categories = append(categories, refType)
+			referencesMap[refType] = refData // refData is *Property
+		}
+	}
+
+	response := ReferenceResponse{
+		References: referencesMap,
+		Count:      len(referencesMap),
+		Categories: categories,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) handleGetReferenceType(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	refType := vars["type"]
+
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	if mapper.References == nil {
+		s.writeError(w, http.StatusNotFound, "NO_REFERENCES", "No references defined")
+		return
+	}
+
+	reference, exists := mapper.References[refType]
+	if !exists {
+		s.writeError(w, http.StatusNotFound, "REFERENCE_NOT_FOUND", fmt.Sprintf("Reference type %s not found", refType))
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"type":      refType,
+		"reference": reference,
+	})
+}
+
+func (s *Server) handleGetEvents(w http.ResponseWriter, r *http.Request) {
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	// For now, return empty events map since mapper.Events is *EventsConfig (config), not event definitions
+	// The actual events should be stored differently in the enhanced mapper
+	eventsMap := make(map[string]interface{})
+
+	// TODO: When enhanced Mapper has proper Events field as map[string]*Event, use:
+	// if mapper.Events != nil {
+	//     for eventName, eventData := range mapper.Events {
+	//         eventsMap[eventName] = eventData
+	//     }
+	// }
+
+	// Get active and recently triggered events from GameHook
+	activeEvents := s.gameHook.GetActiveEvents()
+	recentlyTriggered := s.gameHook.GetRecentlyTriggeredEvents()
+
+	response := EventResponse{
+		Events:    eventsMap,
+		Count:     len(eventsMap),
+		Active:    activeEvents,
+		Triggered: recentlyTriggered,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) handleTriggerEvent(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	eventName := vars["name"]
+
+	var request struct {
+		Force bool `json:"force"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
+		return
+	}
+
+	if err := s.gameHook.TriggerEvent(eventName, request.Force); err != nil {
+		s.writeError(w, http.StatusBadRequest, "TRIGGER_FAILED", err.Error())
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"event":     eventName,
+		"triggered": true,
+		"timestamp": time.Now(),
+	})
+
+	// Broadcast event trigger
+	s.broadcastMessage(map[string]interface{}{
+		"type":       "event_triggered",
+		"event_name": eventName,
+		"forced":     request.Force,
+		"timestamp":  time.Now(),
+	})
+}
+
+func (s *Server) handleGetPropertyMetadata(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	name := vars["name"]
+
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	prop, exists := mapper.Properties[name]
+	if !exists {
+		s.writeError(w, http.StatusNotFound, "PROPERTY_NOT_FOUND", "Property not found")
+		return
+	}
+
+	// Find group for this property
+	var group string
+	for groupName, groupInfo := range mapper.Groups {
+		for _, propName := range groupInfo.Properties {
+			if propName == name {
+				group = groupName
+				break
+			}
+		}
+	}
+
+	// Build references map for enum/flags types
+	references := make(map[string]interface{})
+	if prop.Advanced != nil {
+		if prop.Type == "enum" && prop.Advanced.EnumValues != nil {
+			references["enumValues"] = prop.Advanced.EnumValues
+		}
+		if prop.Type == "flags" && prop.Advanced.FlagDefinitions != nil {
+			references["flagDefinitions"] = prop.Advanced.FlagDefinitions
+		}
+	}
+
+	metadata := PropertyMetadataResponse{
+		Name:         name,
+		Type:         string(prop.Type),
+		Address:      fmt.Sprintf("0x%X", prop.Address),
+		Description:  prop.Description,
+		UIHints:      prop.UIHints,
+		Advanced:     prop.Advanced,
+		Performance:  prop.Performance,
+		Validation:   prop.Validation,
+		Dependencies: prop.DependsOn,
+		Group:        group,
+		References:   references,
+	}
+
+	json.NewEncoder(w).Encode(metadata)
+}
+
+func (s *Server) handleGetPropertyUIHints(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	name := vars["name"]
+
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	prop, exists := mapper.Properties[name]
+	if !exists {
+		s.writeError(w, http.StatusNotFound, "PROPERTY_NOT_FOUND", "Property not found")
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"property":  name,
+		"ui_hints":  prop.UIHints,
+		"timestamp": time.Now(),
+	})
+}
+
+func (s *Server) handleGetPropertiesByGroup(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	groupName := vars["group"]
+
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	group, exists := mapper.Groups[groupName]
+	if !exists {
+		s.writeError(w, http.StatusNotFound, "GROUP_NOT_FOUND", "Property group not found")
+		return
+	}
+
+	// Get property values for this group
+	properties := make([]PropertyResponse, 0, len(group.Properties))
+	for _, propName := range group.Properties {
+		if prop, exists := mapper.Properties[propName]; exists {
+			value, _ := s.gameHook.GetProperty(propName)
+			state := s.gameHook.GetPropertyState(propName)
+
+			propResponse := PropertyResponse{
+				Name:        propName,
+				Value:       value,
+				Type:        string(prop.Type),
+				Address:     fmt.Sprintf("0x%X", prop.Address),
+				Description: prop.Description,
+				Frozen:      prop.Frozen,
+				ReadOnly:    prop.ReadOnly,
+			}
+
+			if state != nil {
+				if stateMap, ok := state.(map[string]interface{}); ok {
+					if lastChanged, ok := stateMap["last_changed"].(time.Time); ok {
+						propResponse.LastChanged = lastChanged
+					}
+					if readCount, ok := stateMap["read_count"].(uint64); ok {
+						propResponse.ReadCount = readCount
+					}
+					if writeCount, ok := stateMap["write_count"].(uint64); ok {
+						propResponse.WriteCount = writeCount
+					}
+				}
+			}
+
+			properties = append(properties, propResponse)
+		}
+	}
+
+	response := map[string]interface{}{
+		"group_name": groupName,
+		"group_info": group,
+		"properties": properties,
+		"count":      len(properties),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) handleGetUIThemes(w http.ResponseWriter, r *http.Request) {
+	themes := map[string]interface{}{
+		"dark": map[string]string{
+			"primary":   "#1a1a1a",
+			"secondary": "#2a2a2a",
+			"accent":    "#4CAF50",
+			"text":      "#ffffff",
+		},
+		"light": map[string]string{
+			"primary":   "#ffffff",
+			"secondary": "#f5f5f5",
+			"accent":    "#2196F3",
+			"text":      "#000000",
+		},
+		"retro": map[string]string{
+			"primary":   "#0f380f",
+			"secondary": "#306230",
+			"accent":    "#8bac0f",
+			"text":      "#9bbc0f",
+		},
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"themes":  themes,
+		"default": "dark",
+		"current": "dark", // Could be configurable
+	})
+}
+
+func (s *Server) handleGetUILayout(w http.ResponseWriter, r *http.Request) {
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	// Count references safely
+	referencesCount := 0
+	if mapper.References != nil {
+		referencesCount = len(mapper.References)
+	}
+
+	// Events count is 0 for now since mapper.Events is config, not event definitions
+	eventsCount := 0
+
+	layout := map[string]interface{}{
+		"groups":           mapper.Groups,
+		"property_count":   len(mapper.Properties),
+		"computed_count":   len(mapper.Computed),
+		"references_count": referencesCount,
+		"events_count":     eventsCount,
+	}
+
+	json.NewEncoder(w).Encode(layout)
+}
+
+func (s *Server) handleGetValidationRules(w http.ResponseWriter, r *http.Request) {
+	mapper := s.gameHook.GetCurrentMapperFull()
+	if mapper == nil {
+		s.writeError(w, http.StatusNotFound, "NO_MAPPER", "No mapper loaded")
+		return
+	}
+
+	rules := make(map[string]interface{})
+	for name, prop := range mapper.Properties {
+		if prop.Validation != nil {
+			rules[name] = prop.Validation
+		}
+	}
+
+	// Handle global validation if it exists (check if the field exists)
+	var globalRules interface{}
+	// Note: GlobalValidation field may not exist yet in the current Mapper struct
+	// This is a placeholder for when the field is added to the enhanced Mapper
+	// globalRules = mapper.GlobalValidation
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"rules":        rules,
+		"global_rules": globalRules,
+		"count":        len(rules),
+	})
+}
+
+func (s *Server) handleGetValidationErrors(w http.ResponseWriter, r *http.Request) {
+	errors := s.gameHook.GetValidationErrors()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"errors":    errors,
+		"count":     len(errors),
+		"timestamp": time.Now(),
+	})
 }
 
 func (s *Server) handleGetMapperMeta(w http.ResponseWriter, r *http.Request) {
@@ -871,6 +1295,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"batch_updates",
 			"freeze_notifications",
 			"state_tracking",
+			"events",
+			"references",
+			"ui_hints",
 		},
 		"update_rate": "60fps",
 		"timestamp":   time.Now(),
@@ -894,7 +1321,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Enhanced WebSocket client disconnected")
 }
 
-// handleWebSocketMessage handles incoming WebSocket messages
+// Enhanced WebSocket message handling
 func (s *Server) handleWebSocketMessage(conn *websocket.Conn, message map[string]interface{}) {
 	msgType, ok := message["type"].(string)
 	if !ok {
@@ -905,11 +1332,64 @@ func (s *Server) handleWebSocketMessage(conn *websocket.Conn, message map[string
 	case "subscribe_property":
 		// Subscribe to specific property changes
 		if propertyName, ok := message["property"].(string); ok {
-			// TODO: Implement per-client property subscriptions
 			conn.WriteJSON(map[string]interface{}{
 				"type":      "subscription_confirmed",
 				"property":  propertyName,
 				"timestamp": time.Now(),
+			})
+		}
+
+	case "subscribe_events":
+		conn.WriteJSON(map[string]interface{}{
+			"type":      "event_subscription_confirmed",
+			"timestamp": time.Now(),
+		})
+
+	case "get_property_metadata":
+		if propertyName, ok := message["property"].(string); ok {
+			mapper := s.gameHook.GetCurrentMapperFull()
+			if mapper != nil && mapper.Properties[propertyName] != nil {
+				prop := mapper.Properties[propertyName]
+				conn.WriteJSON(map[string]interface{}{
+					"type":       "property_metadata",
+					"property":   propertyName,
+					"ui_hints":   prop.UIHints,
+					"advanced":   prop.Advanced,
+					"validation": prop.Validation,
+					"timestamp":  time.Now(),
+				})
+			}
+		}
+
+	case "trigger_event":
+		if eventName, ok := message["event"].(string); ok {
+			force, _ := message["force"].(bool)
+			if err := s.gameHook.TriggerEvent(eventName, force); err == nil {
+				conn.WriteJSON(map[string]interface{}{
+					"type":      "event_triggered",
+					"event":     eventName,
+					"success":   true,
+					"timestamp": time.Now(),
+				})
+			} else {
+				conn.WriteJSON(map[string]interface{}{
+					"type":      "event_trigger_failed",
+					"event":     eventName,
+					"error":     err.Error(),
+					"timestamp": time.Now(),
+				})
+			}
+		}
+
+	case "get_ui_layout":
+		mapper := s.gameHook.GetCurrentMapperFull()
+		if mapper != nil {
+			conn.WriteJSON(map[string]interface{}{
+				"type":       "ui_layout",
+				"groups":     mapper.Groups,
+				"computed":   mapper.Computed,
+				"references": mapper.References,
+				"timestamp":  time.Now(),
 			})
 		}
 

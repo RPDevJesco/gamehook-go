@@ -1,34 +1,91 @@
 package pokemon_red_blue
 
-name: "pokemon_red_blue"
-game: "Pokemon Red/Blue"
-version: "2.0.0"
-minGameHookVersion: "0.6.0"
-author: "GameHook Enhanced Team"
-description: "Enhanced Pokemon Red/Blue mapper with advanced property management, validation, and freezing capabilities"
-website: "https://github.com/gamehook/mappers"
+// ===== POKEMON RED/BLUE ENHANCED MAPPER =====
 
-// Enhanced platform configuration
+// Mapper metadata
+name: "pokemon_red_blue_enhanced"
+game: "Pokemon Red/Blue"
+version: "3.0.0"
+minGameHookVersion: "0.8.0"
+author: "GameHook Team"
+description: "Enhanced Pokemon Red/Blue mapper with intelligent data structures"
+license: "MIT"
+
+metadata: {
+    created: "2025-01-01T00:00:00Z"
+    modified: "2025-01-01T00:00:00Z"
+    tags: ["pokemon", "gameboy", "rpg", "nintendo"]
+    category: "RPG"
+    language: "English"
+    region: "US"
+    revision: "1.0"
+}
+
+// ===== PLATFORM CONFIGURATION =====
 platform: {
     name: "Game Boy"
     endian: "little"
     description: "Nintendo Game Boy running Pokemon Red/Blue"
-    manufacturer: "Nintendo"
-    releaseYear: 1989
 
+    // Platform constants for addressing and calculations
     constants: {
+        // Memory layout
         ramBase: 0xC000
+        wramBank0Start: 0xC000
+        wramBank1Start: 0xD000
+
+        // Pokemon data structure sizes
         pokemonDataSize: 44
+        pokemonNicknameSize: 11
+        pokemonMoveCount: 4
+
+        // Game limits
         maxPokemonLevel: 100
         maxPartySize: 6
+        maxBoxSize: 20
         maxMoney: 999999
+        maxItemQuantity: 99
+        pokemonSpeciesCount: 151
+        badgeCount: 8
+
+        // Type system
+        typeCount: 16
+        moveCount: 165
+        itemCount: 255
     }
 
     baseAddresses: {
-        "wram": "0xC000"
-        "party": "0xD163"
-        "money": "0xD347"
-        "player": "0xD158"
+        // Player data
+        player: "0xD158"
+        playerId: "0xD359"
+        money: "0xD347"
+
+        // Party data
+        partyCount: "0xD163"
+        partySpecies: "0xD164"
+        partyData: "0xD16B"
+        partyNicknames: "0xD2B5"
+
+        // PC storage
+        currentBox: "0xDA96"
+        currentBoxNicknames: "0xDE06"
+        currentBoxCount: "0xDA80"
+
+        // Battle system
+        battleType: "0xD05A"
+        battlePlayerData: "0xD009"
+        battleEnemyData: "0xCFD8"
+        battleEffects: "0xD062"
+
+        // Game state
+        badges: "0xD356"
+        pokedexSeen: "0xD30A"
+        pokedexCaught: "0xD2F7"
+        starterPokemon: "0xD717"
+
+        // Items
+        bagCount: "0xD31D"
+        bagItems: "0xD31E"
     }
 
     memoryBlocks: [
@@ -36,171 +93,176 @@ platform: {
             name: "WRAM Bank 0"
             start: "0xC000"
             end: "0xCFFF"
-            description: "Work RAM Bank 0 - Contains battle data, active Pokemon"
+            description: "Work RAM Bank 0 - System variables and temporary data"
+            cacheable: true
+            accessPattern: "random"
         },
         {
             name: "WRAM Bank 1"
             start: "0xD000"
             end: "0xDFFF"
-            description: "Work RAM Bank 1 - Contains party data, player data, save data"
+            description: "Work RAM Bank 1 - Game data and save state"
+            cacheable: true
+            accessPattern: "sequential"
+            watchable: true
         }
     ]
+
+    capabilities: {
+        maxMemorySize: 65536
+        addressBusWidth: 16
+        dataBusWidth: 8
+        hasMemoryMapping: false
+        supportsBanking: false
+    }
+
+    performance: {
+        readLatency: 1
+        writeLatency: 1
+        batchSize: 32
+    }
 }
 
-// Global constants accessible in expressions
-constants: {
-    maxLevel: 100
-    maxHp: 999
-    maxMoney: 999999
-    pokemonSpeciesCount: 151
-    badgeCount: 8
+// ===== GLOBAL CHARACTER MAPS =====
+characterMaps: {
+    pokemon: {
+        "0x50": " "
+        "0x80": "A", "0x81": "B", "0x82": "C", "0x83": "D", "0x84": "E"
+        "0x85": "F", "0x86": "G", "0x87": "H", "0x88": "I", "0x89": "J"
+        "0x8A": "K", "0x8B": "L", "0x8C": "M", "0x8D": "N", "0x8E": "O"
+        "0x8F": "P", "0x90": "Q", "0x91": "R", "0x92": "S", "0x93": "T"
+        "0x94": "U", "0x95": "V", "0x96": "W", "0x97": "X", "0x98": "Y"
+        "0x99": "Z"
+        "0xA0": "a", "0xA1": "b", "0xA2": "c", "0xA3": "d", "0xA4": "e"
+        "0xA5": "f", "0xA6": "g", "0xA7": "h", "0xA8": "i", "0xA9": "j"
+        "0xAA": "k", "0xAB": "l", "0xAC": "m", "0xAD": "n", "0xAE": "o"
+        "0xAF": "p", "0xB0": "q", "0xB1": "r", "0xB2": "s", "0xB3": "t"
+        "0xB4": "u", "0xB5": "v", "0xB6": "w", "0xB7": "x", "0xB8": "y"
+        "0xB9": "z"
+        "0xFF": ""
+    }
 }
 
-// Mapper configuration
-config: {
-    updateInterval: "16ms"      // 60fps monitoring
-    enableAutoFreeze: false
-    validateOnLoad: true
-    enableStatistics: true
-    cacheProperties: true
-    logChanges: true
+// ===== REFERENCE TYPE DEFINITIONS =====
+references: {
+    pokemonSpecies: {
+        type: "enum"
+        advanced: {
+            enumValues: {
+                "0": {value: 0, description: "MissingNo", color: "#808080"}
+                "1": {value: 1, description: "Bulbasaur", color: "#78C850", type1: "Grass", type2: "Poison"}
+                "4": {value: 4, description: "Charmander", color: "#F08030", type1: "Fire"}
+                "7": {value: 7, description: "Squirtle", color: "#6890F0", type1: "Water"}
+                "25": {value: 25, description: "Pikachu", color: "#F8D030", type1: "Electric"}
+                "150": {value: 150, description: "Mewtwo", color: "#A040A0", type1: "Psychic"}
+                "151": {value: 151, description: "Mew", color: "#FF1493", type1: "Psychic"}
+                // More species can be added as needed
+            }
+            allowUnknownValues: true
+            defaultValue: 0
+        }
+    }
+
+    pokemonTypes: {
+        type: "enum"
+        advanced: {
+            enumValues: {
+                "0": {value: 0, description: "Normal", color: "#A8A878"}
+                "1": {value: 1, description: "Fighting", color: "#C03028"}
+                "2": {value: 2, description: "Flying", color: "#A890F0"}
+                "3": {value: 3, description: "Poison", color: "#A040A0"}
+                "4": {value: 4, description: "Ground", color: "#E0C068"}
+                "5": {value: 5, description: "Rock", color: "#B8A038"}
+                "6": {value: 6, description: "Bug", color: "#A8B820"}
+                "7": {value: 7, description: "Ghost", color: "#705898"}
+                "8": {value: 8, description: "Fire", color: "#F08030"}
+                "9": {value: 9, description: "Water", color: "#6890F0"}
+                "10": {value: 10, description: "Grass", color: "#78C850"}
+                "11": {value: 11, description: "Electric", color: "#F8D030"}
+                "12": {value: 12, description: "Psychic", color: "#F85888"}
+                "13": {value: 13, description: "Ice", color: "#98D8D8"}
+                "14": {value: 14, description: "Dragon", color: "#7038F8"}
+            }
+        }
+    }
+
+    statusConditions: {
+        type: "enum"
+        advanced: {
+            enumValues: {
+                "0": {value: 0, description: "None", color: "#00FF00"}
+                "2": {value: 2, description: "Sleep", color: "#6F42C1"}
+                "4": {value: 4, description: "Poison", color: "#A040A0"}
+                "8": {value: 8, description: "Burn", color: "#F08030"}
+                "16": {value: 16, description: "Freeze", color: "#98D8D8"}
+                "32": {value: 32, description: "Paralysis", color: "#F8D030"}
+            }
+        }
+    }
 }
 
-// UI configuration
-ui: {
-    theme: "retro"
-    primaryColor: "#FFD700"     // Pokemon yellow
-    layout: "grid"
-    defaultGroup: "trainer"
-    showAddresses: true
-    showTypes: true
-    compactMode: false
-}
+// ===== CORE PROPERTY DEFINITIONS =====
 
-// Enhanced properties with validation, freezing, and advanced types
 properties: {
-    // === TRAINER INFORMATION ===
+    // ===== PLAYER INFORMATION =====
     playerName: {
         name: "playerName"
         type: "string"
         address: "0xD158"
         length: 11
-        description: "Player's name (trainer name)"
-        charMap: #PokemonCharMap
+        description: "Player's trainer name"
+        charMap: characterMaps.pokemon
+        freezable: true
         validation: {
             required: true
-            pattern: "^[A-Z][A-Z ]*$"  // Must start with capital letter
+            pattern: "^[A-Za-z0-9 ]*$"
         }
-        freezable: true
         uiHints: {
-            category: "trainer"
-            displayFormat: "text"
-            showInList: true
+            priority: 10
+            icon: "👤"
+            editable: true
         }
     }
 
-    rivalName: {
-        name: "rivalName"
-        type: "string"
-        address: "0xD34A"
-        length: 8
-        description: "Rival's name"
-        charMap: #PokemonCharMap
-        validation: {
-            required: true
-        }
+    playerId: {
+        name: "playerId"
+        type: "uint16"
+        address: "0xD359"
+        description: "Player's trainer ID"
         freezable: true
+        validation: {
+            minValue: 0
+            maxValue: 65535
+        }
         uiHints: {
-            category: "trainer"
-            displayFormat: "text"
+            displayFormat: "hex"
+            icon: "🆔"
         }
     }
 
     money: {
         name: "money"
-        type: "bcd"
+        type: "uint32"
         address: "0xD347"
         length: 3
         description: "Player's money in BCD format"
-        validation: {
-            minValue: 0
-            maxValue: 999999
-        }
         transform: {
-            // Money is stored as BCD, but we want to validate the decimal value
-            expression: "value"
+            expression: "bcdToDecimal(value)"
+            validation: {
+                minValue: 0
+                maxValue: 999999
+            }
         }
         freezable: true
-        defaultFrozen: false
         uiHints: {
-            category: "trainer"
             displayFormat: "currency"
             unit: "₽"
-            showInList: true
+            icon: "💰"
+            priority: 8
         }
     }
 
-    badges: {
-        name: "badges"
-        type: "flags"
-        address: "0xD356"
-        description: "Badge collection bitfield"
-        advanced: {
-            flagDefinitions: {
-                "boulder": {bit: 0, description: "Boulder Badge (Brock)"}
-                "cascade": {bit: 1, description: "Cascade Badge (Misty)"}
-                "thunder": {bit: 2, description: "Thunder Badge (Lt. Surge)"}
-                "rainbow": {bit: 3, description: "Rainbow Badge (Erika)"}
-                "soul": {bit: 4, description: "Soul Badge (Koga)"}
-                "marsh": {bit: 5, description: "Marsh Badge (Sabrina)"}
-                "volcano": {bit: 6, description: "Volcano Badge (Blaine)"}
-                "earth": {bit: 7, description: "Earth Badge (Giovanni)"}
-            }
-        }
-        validation: {
-            constraint: "value >= 0 && value <= 255"
-        }
-        freezable: true
-        uiHints: {
-            category: "progression"
-            displayFormat: "flag_list"
-            showInList: true
-        }
-    }
-
-    currentMap: {
-        name: "currentMap"
-        type: "enum"
-        address: "0xD35E"
-        description: "Current map/location ID"
-        advanced: {
-            enumValues: {
-                "pallet_town": {value: 0, description: "Pallet Town", color: "#90EE90"}
-                "viridian_city": {value: 1, description: "Viridian City", color: "#228B22"}
-                "pewter_city": {value: 2, description: "Pewter City", color: "#A9A9A9"}
-                "cerulean_city": {value: 3, description: "Cerulean City", color: "#87CEEB"}
-                "lavender_town": {value: 4, description: "Lavender Town", color: "#E6E6FA"}
-                "vermilion_city": {value: 5, description: "Vermilion City", color: "#FF6347"}
-                "celadon_city": {value: 6, description: "Celadon City", color: "#98FB98"}
-                "fuchsia_city": {value: 7, description: "Fuchsia City", color: "#FF69B4"}
-                "cinnabar_island": {value: 8, description: "Cinnabar Island", color: "#DC143C"}
-                "indigo_plateau": {value: 9, description: "Indigo Plateau", color: "#4B0082"}
-                "saffron_city": {value: 10, description: "Saffron City", color: "#F0E68C"}
-            }
-        }
-        validation: {
-            minValue: 0
-            maxValue: 255
-        }
-        freezable: true
-        uiHints: {
-            category: "location"
-            displayFormat: "enum_dropdown"
-            showInList: true
-        }
-    }
-
-    // === PARTY INFORMATION ===
+    // ===== PARTY POKEMON SYSTEM =====
     teamCount: {
         name: "teamCount"
         type: "uint8"
@@ -212,65 +274,24 @@ properties: {
         }
         freezable: true
         uiHints: {
-            category: "party"
-            displayFormat: "decimal"
-            unit: "Pokemon"
-            showInList: true
+            priority: 9
+            icon: "🎮"
         }
     }
 
-    // Pokemon 1 (Enhanced with validation and advanced features)
-    pokemon1Nickname: {
-        name: "pokemon1Nickname"
-        type: "string"
-        address: "0xD2B5"
-        length: 11
-        description: "First Pokemon's nickname"
-        charMap: #PokemonCharMap
-        dependsOn: ["teamCount"]
-        validation: {
-            constraint: "teamCount > 0"  // Only valid if we have Pokemon
-        }
-        freezable: true
-        uiHints: {
-            category: "pokemon"
-            displayFormat: "text"
-        }
-    }
-
+    // First Pokemon detailed properties (most commonly accessed)
     pokemon1Species: {
         name: "pokemon1Species"
-        type: "enum"
+        type: "uint8"
         address: "0xD16B"
-        description: "First Pokemon's species ID"
+        description: "First Pokemon species"
         advanced: {
-            enumValues: {
-                "bulbasaur": {value: 153, description: "Bulbasaur #001", color: "#78C850"}
-                "ivysaur": {value: 9, description: "Ivysaur #002", color: "#78C850"}
-                "venusaur": {value: 154, description: "Venusaur #003", color: "#78C850"}
-                "charmander": {value: 176, description: "Charmander #004", color: "#F08030"}
-                "charmeleon": {value: 178, description: "Charmeleon #005", color: "#F08030"}
-                "charizard": {value: 180, description: "Charizard #006", color: "#F08030"}
-                "squirtle": {value: 177, description: "Squirtle #007", color: "#6890F0"}
-                "wartortle": {value: 179, description: "Wartortle #008", color: "#6890F0"}
-                "blastoise": {value: 28, description: "Blastoise #009", color: "#6890F0"}
-                "pikachu": {value: 84, description: "Pikachu #025", color: "#F8D030"}
-                "raichu": {value: 85, description: "Raichu #026", color: "#F8D030"}
-                "mew": {value: 21, description: "Mew #151", color: "#FB1B69"}
-                "mewtwo": {value: 131, description: "Mewtwo #150", color: "#A040A0"}
-            }
-        }
-        dependsOn: ["teamCount"]
-        validation: {
-            constraint: "teamCount > 0"
-            minValue: 1
-            maxValue: 255
+            enumValues: references.pokemonSpecies.advanced.enumValues
         }
         freezable: true
         uiHints: {
-            category: "pokemon"
-            displayFormat: "enum_dropdown"
-            showInList: true
+            priority: 10
+            icon: "⭐"
         }
     }
 
@@ -278,39 +299,28 @@ properties: {
         name: "pokemon1Level"
         type: "uint8"
         address: "0xD18C"
-        description: "First Pokemon's level"
-        dependsOn: ["teamCount"]
+        description: "First Pokemon level"
         validation: {
-            constraint: "teamCount > 0"
             minValue: 1
             maxValue: 100
         }
         freezable: true
         uiHints: {
-            category: "pokemon"
             displayFormat: "decimal"
             unit: "Lv"
-            showInList: true
+            priority: 9
         }
     }
 
     pokemon1Hp: {
         name: "pokemon1Hp"
         type: "uint16"
-        address: "0xD16C"
-        description: "First Pokemon's current HP"
-        dependsOn: ["teamCount", "pokemon1MaxHp"]
-        validation: {
-            constraint: "teamCount > 0 && value <= pokemon1MaxHp"
-            minValue: 0
-            maxValue: 999
-        }
+        address: "0xD16D"
+        description: "First Pokemon current HP"
         freezable: true
         uiHints: {
-            category: "pokemon"
-            displayFormat: "fraction"
-            unit: "HP"
-            showInList: true
+            priority: 8
+            color: "#FF0000"
         }
     }
 
@@ -318,307 +328,384 @@ properties: {
         name: "pokemon1MaxHp"
         type: "uint16"
         address: "0xD18D"
-        description: "First Pokemon's maximum HP"
-        dependsOn: ["teamCount"]
-        validation: {
-            constraint: "teamCount > 0"
-            minValue: 1
-            maxValue: 999
-        }
-        freezable: true
+        description: "First Pokemon max HP"
         uiHints: {
-            category: "pokemon"
-            displayFormat: "decimal"
-            unit: "HP"
+            priority: 7
         }
     }
 
-    // === BATTLE INFORMATION ===
+    pokemon1Attack: {
+        name: "pokemon1Attack"
+        type: "uint16"
+        address: "0xD18F"
+        description: "First Pokemon attack stat"
+    }
+
+    pokemon1Defense: {
+        name: "pokemon1Defense"
+        type: "uint16"
+        address: "0xD191"
+        description: "First Pokemon defense stat"
+    }
+
+    pokemon1Speed: {
+        name: "pokemon1Speed"
+        type: "uint16"
+        address: "0xD193"
+        description: "First Pokemon speed stat"
+    }
+
+    pokemon1Special: {
+        name: "pokemon1Special"
+        type: "uint16"
+        address: "0xD195"
+        description: "First Pokemon special stat"
+    }
+
+    pokemon1ExpPoints: {
+        name: "pokemon1ExpPoints"
+        type: "uint32"
+        address: "0xD179"
+        length: 3
+        description: "First Pokemon experience points"
+        transform: {
+            expression: "value & 0xFFFFFF"
+        }
+        freezable: true
+        uiHints: {
+            displayFormat: "decimal"
+            unit: "EXP"
+        }
+    }
+
+    pokemon1Type1: {
+        name: "pokemon1Type1"
+        type: "uint8"
+        address: "0xD170"
+        description: "First Pokemon primary type"
+        advanced: {
+            enumValues: references.pokemonTypes.advanced.enumValues
+        }
+    }
+
+    pokemon1Type2: {
+        name: "pokemon1Type2"
+        type: "uint8"
+        address: "0xD171"
+        description: "First Pokemon secondary type"
+        advanced: {
+            enumValues: references.pokemonTypes.advanced.enumValues
+        }
+    }
+
+    pokemon1Status: {
+        name: "pokemon1Status"
+        type: "uint8"
+        address: "0xD16F"
+        description: "First Pokemon status condition"
+        advanced: {
+            enumValues: references.statusConditions.advanced.enumValues
+        }
+        freezable: true
+    }
+
+    // Party nicknames (individual access)
+    pokemon1Nickname: {
+        name: "pokemon1Nickname"
+        type: "string"
+        address: "0xD2B5"
+        length: 11
+        description: "First Pokemon nickname"
+        charMap: characterMaps.pokemon
+        freezable: true
+        uiHints: {
+            editable: true
+            priority: 8
+        }
+    }
+
+    // ===== BATTLE SYSTEM =====
     battleType: {
         name: "battleType"
-        type: "enum"
-        address: "0xD057"
+        type: "uint8"
+        address: "0xD05A"
         description: "Current battle type"
         advanced: {
             enumValues: {
-                "none": {value: 0, description: "Not in battle", color: "#90EE90"}
-                "wild": {value: 1, description: "Wild Pokemon", color: "#FFD700"}
-                "trainer": {value: 2, description: "Trainer battle", color: "#FF6347"}
-                "safari": {value: 3, description: "Safari Zone", color: "#98FB98"}
-                "old_man": {value: 4, description: "Old Man tutorial", color: "#DDA0DD"}
-                "ghost": {value: 5, description: "Ghost battle", color: "#9370DB"}
+                "0": {value: 0, description: "No Battle"}
+                "1": {value: 1, description: "Wild Pokemon"}
+                "2": {value: 2, description: "Trainer Battle"}
+                "3": {value: 3, description: "Safari Zone"}
             }
         }
-        validation: {
-            minValue: 0
-            maxValue: 255
-        }
-        freezable: true
         uiHints: {
-            category: "battle"
-            displayFormat: "enum_badge"
-            showInList: true
+            icon: "⚔️"
         }
     }
 
-    activePokemonSlot: {
-        name: "activePokemonSlot"
+    // ===== GAME PROGRESS =====
+    badges: {
+        name: "badges"
+        type: "flags"
+        address: "0xD356"
+        length: 1
+        description: "Gym badges earned"
+
+        advanced: {
+            flagDefinitions: {
+                boulder: {bit: 0, description: "Boulder Badge"}
+                cascade: {bit: 1, description: "Cascade Badge"}
+                thunder: {bit: 2, description: "Thunder Badge"}
+                rainbow: {bit: 3, description: "Rainbow Badge"}
+                soul: {bit: 4, description: "Soul Badge"}
+                marsh: {bit: 5, description: "Marsh Badge"}
+                volcano: {bit: 6, description: "Volcano Badge"}
+                earth: {bit: 7, description: "Earth Badge"}
+            }
+        }
+
+        freezable: true
+
+        uiHints: {
+            displayMode: "custom"
+            icon: "🏆"
+            priority: 7
+        }
+    }
+
+    starterPokemon: {
+        name: "starterPokemon"
         type: "uint8"
-        address: "0xCC2F"
-        description: "Active Pokemon party slot (0-5)"
-        dependsOn: ["battleType", "teamCount"]
-        validation: {
-            constraint: "battleType > 0 && value < teamCount"
-            minValue: 0
-            maxValue: 5
-        }
-        freezable: true
-        uiHints: {
-            category: "battle"
-            displayFormat: "decimal"
-            unit: "Slot"
-        }
-    }
-
-    activePokemonSpecies: {
-        name: "activePokemonSpecies"
-        type: "enum"
-        address: "0xD014"
-        description: "Active Pokemon species in battle"
-        dependsOn: ["battleType"]
-        // Reuse the same enum values as pokemon1Species
+        address: "0xD717"
+        description: "Starter Pokemon received from Oak"
         advanced: {
             enumValues: {
-                "bulbasaur": {value: 153, description: "Bulbasaur #001", color: "#78C850"}
-                "charmander": {value: 176, description: "Charmander #004", color: "#F08030"}
-                "squirtle": {value: 177, description: "Squirtle #007", color: "#6890F0"}
-                "pikachu": {value: 84, description: "Pikachu #025", color: "#F8D030"}
+                "153": {value: 153, description: "Bulbasaur"}
+                "156": {value: 156, description: "Charmander"}
+                "159": {value: 159, description: "Squirtle"}
             }
         }
-        validation: {
-            constraint: "battleType > 0"
-        }
-        freezable: true
         uiHints: {
-            category: "battle"
-            displayFormat: "enum_dropdown"
+            icon: "🌱"
         }
     }
 
-    activePokemonLevel: {
-        name: "activePokemonLevel"
+    // Bag system
+    bagCount: {
+        name: "bagCount"
         type: "uint8"
-        address: "0xD022"
-        description: "Active Pokemon level in battle"
-        dependsOn: ["battleType"]
+        address: "0xD31D"
+        description: "Number of different items in bag"
         validation: {
-            constraint: "battleType > 0"
-            minValue: 1
-            maxValue: 100
-        }
-        freezable: true
-        uiHints: {
-            category: "battle"
-            displayFormat: "decimal"
-            unit: "Lv"
-        }
-    }
-
-    // === COMPUTED PROPERTIES ===
-    badgeCount: {
-        name: "badgeCount"
-        type: "uint8"
-        computed: {
-            expression: "// Count set bits in badges byte - implemented in Go"
-            dependencies: ["badges"]
-        }
-        description: "Number of badges earned"
-        uiHints: {
-            category: "progression"
-            displayFormat: "decimal"
-            unit: "badges"
-            showInList: true
-        }
-    }
-
-    pokemon1HpPercentage: {
-        name: "pokemon1HpPercentage"
-        type: "percentage"
-        computed: {
-            expression: "if pokemon1MaxHp > 0 then (pokemon1Hp / pokemon1MaxHp) * 100 else 0"
-            dependencies: ["pokemon1Hp", "pokemon1MaxHp"]
-        }
-        description: "First Pokemon's HP as percentage"
-        advanced: {
-            maxValue: 100
+            minValue: 0
+            maxValue: 20
         }
         uiHints: {
-            category: "pokemon"
-            displayFormat: "percentage"
-            precision: 1
-            showInList: true
-        }
-    }
-
-    partyStrength: {
-        name: "partyStrength"
-        type: "uint16"
-        computed: {
-            expression: "if teamCount > 0 then pokemon1Level * teamCount else 0"
-            dependencies: ["pokemon1Level", "teamCount"]
-        }
-        description: "Calculated party strength"
-        uiHints: {
-            category: "stats"
-            displayFormat: "decimal"
-        }
-    }
-
-    gameCompletionPercentage: {
-        name: "gameCompletionPercentage"
-        type: "percentage"
-        computed: {
-            expression: "(badgeCount / 8) * 100"
-            dependencies: ["badgeCount"]
-        }
-        description: "Game completion percentage based on badges"
-        advanced: {
-            maxValue: 100
-        }
-        uiHints: {
-            category: "progression"
-            displayFormat: "percentage"
-            precision: 1
-            showInList: true
+            icon: "🎒"
         }
     }
 }
 
-// Property groups for better organization
+// ===== COMPUTED PROPERTIES (Simplified) =====
+computed: {
+    // Pokemon HP percentage for UI
+    pokemon1HpPercentage: {
+        expression: "pokemon1MaxHp > 0 ? (pokemon1Hp / pokemon1MaxHp) * 100 : 0"
+        dependencies: ["pokemon1Hp", "pokemon1MaxHp"]
+        type: "percentage"
+        cached: true
+    }
+
+    // Badge count
+    badgeCount: {
+        expression: """
+        ((badges & 1) > 0 ? 1 : 0) +
+        ((badges & 2) > 0 ? 1 : 0) +
+        ((badges & 4) > 0 ? 1 : 0) +
+        ((badges & 8) > 0 ? 1 : 0) +
+        ((badges & 16) > 0 ? 1 : 0) +
+        ((badges & 32) > 0 ? 1 : 0) +
+        ((badges & 64) > 0 ? 1 : 0) +
+        ((badges & 128) > 0 ? 1 : 0)
+        """
+        dependencies: ["badges"]
+        cached: true
+    }
+
+    // Battle readiness check
+    canBattle: {
+        expression: "teamCount > 0 && pokemon1Hp > 0"
+        dependencies: ["teamCount", "pokemon1Hp"]
+        type: "bool"
+    }
+
+    // Is Pokemon at critical health
+    pokemon1Critical: {
+        expression: "pokemon1MaxHp > 0 && (pokemon1Hp / pokemon1MaxHp) < 0.25"
+        dependencies: ["pokemon1Hp", "pokemon1MaxHp"]
+        type: "bool"
+    }
+}
+
+// ===== UI ORGANIZATION =====
 groups: {
-    trainer: {
-        name: "Trainer Info"
-        description: "Player and rival information"
+    player: {
+        name: "Player Info"
         icon: "👤"
-        properties: ["playerName", "rivalName", "money"]
-        collapsed: false
+        properties: ["playerName", "playerId", "money"]
+        color: "#2196F3"
+        priority: 10
+    }
+
+    pokemon: {
+        name: "First Pokemon"
+        icon: "⭐"
+        properties: [
+            "pokemon1Species", "pokemon1Nickname", "pokemon1Level",
+            "pokemon1Hp", "pokemon1MaxHp", "pokemon1ExpPoints",
+            "pokemon1Type1", "pokemon1Type2", "pokemon1Status"
+        ]
         color: "#4CAF50"
-    }
-
-    party: {
-        name: "Pokemon Party"
-        description: "Party Pokemon information"
-        icon: "⚡"
-        properties: ["teamCount", "pokemon1Nickname", "pokemon1Species", "pokemon1Level", "pokemon1Hp", "pokemon1MaxHp"]
-        collapsed: false
-        color: "#FFD700"
-    }
-
-    battle: {
-        name: "Battle Status"
-        description: "Current battle information"
-        icon: "⚔️"
-        properties: ["battleType", "activePokemonSlot", "activePokemonSpecies", "activePokemonLevel"]
-        collapsed: false
-        color: "#FF6347"
-    }
-
-    progression: {
-        name: "Game Progress"
-        description: "Badges, location, and completion"
-        icon: "🏆"
-        properties: ["badges", "badgeCount", "currentMap", "gameCompletionPercentage"]
-        collapsed: false
-        color: "#9C27B0"
+        priority: 9
     }
 
     stats: {
-        name: "Statistics"
-        description: "Computed stats and analytics"
+        name: "Pokemon Stats"
         icon: "📊"
-        properties: ["pokemon1HpPercentage", "partyStrength"]
+        properties: [
+            "pokemon1Attack", "pokemon1Defense",
+            "pokemon1Speed", "pokemon1Special"
+        ]
+        color: "#FF9800"
         collapsed: true
+    }
+
+    party: {
+        name: "Party"
+        icon: "🎮"
+        properties: ["teamCount", "canBattle"]
+        color: "#4CAF50"
+        priority: 8
+    }
+
+    battle: {
+        name: "Battle System"
+        icon: "⚔️"
+        properties: ["battleType"]
+        color: "#F44336"
+
+        conditionalDisplay: {
+            expression: "battleType > 0"
+            dependencies: ["battleType"]
+        }
+    }
+
+    progress: {
+        name: "Game Progress"
+        icon: "🏆"
+        properties: ["badges", "badgeCount", "starterPokemon"]
+        color: "#9C27B0"
+        priority: 6
+    }
+
+    inventory: {
+        name: "Inventory"
+        icon: "🎒"
+        properties: ["bagCount"]
+        color: "#795548"
+        collapsed: true
+    }
+
+    computed: {
+        name: "Computed Values"
+        icon: "🧮"
+        properties: ["pokemon1HpPercentage", "pokemon1Critical"]
         color: "#607D8B"
+        collapsed: true
     }
 }
 
-// Computed properties at mapper level
-computed: {
-    averagePartyLevel: {
-        expression: "if teamCount > 0 then pokemon1Level else 0"  // Simplified for now
-        dependencies: ["teamCount", "pokemon1Level"]
-        type: "uint8"
+// ===== VALIDATION RULES (Simplified) =====
+globalValidation: {
+    memoryLayout: {
+        checkOverlaps: true
+        checkBounds: true
+        checkAlignment: true
     }
 
-    battleReadiness: {
-        expression: """
-            if teamCount == 0 then "No Pokemon"
-            else if partyStrength < 50 then "Weak"
-            else if partyStrength < 150 then "Medium"
-            else "Strong"
-        """
-        dependencies: ["teamCount", "partyStrength"]
-        type: "string"
-    }
+    crossValidation: [
+        {
+            name: "hp_bounds_check"
+            expression: "pokemon1Hp <= pokemon1MaxHp"
+            dependencies: ["pokemon1Hp", "pokemon1MaxHp"]
+            message: "Current HP cannot exceed maximum HP"
+        },
+        {
+            name: "level_bounds_check"
+            expression: "pokemon1Level >= 1 && pokemon1Level <= 100"
+            dependencies: ["pokemon1Level"]
+            message: "Pokemon level must be between 1 and 100"
+        },
+        {
+            name: "team_size_check"
+            expression: "teamCount >= 0 && teamCount <= 6"
+            dependencies: ["teamCount"]
+            message: "Team count must be between 0 and 6"
+        }
+    ]
 
-    progressStatus: {
-        expression: """
-            if badgeCount == 8 then "Champion!"
-            else if badgeCount >= 6 then "Almost there!"
-            else if badgeCount >= 4 then "Halfway done"
-            else if badgeCount >= 2 then "Getting started"
-            else "Just beginning"
-        """
-        dependencies: ["badgeCount"]
-        type: "string"
+    performance: {
+        maxProperties: 1000
+        maxComputedDepth: 5
+        warnSlowProperties: true
     }
 }
 
-// Character map definition
-#PokemonCharMap: {
-    "0x50": " "
-    "0x80": "A", "0x81": "B", "0x82": "C", "0x83": "D", "0x84": "E"
-    "0x85": "F", "0x86": "G", "0x87": "H", "0x88": "I", "0x89": "J"
-    "0x8A": "K", "0x8B": "L", "0x8C": "M", "0x8D": "N", "0x8E": "O"
-    "0x8F": "P", "0x90": "Q", "0x91": "R", "0x92": "S", "0x93": "T"
-    "0x94": "U", "0x95": "V", "0x96": "W", "0x97": "X", "0x98": "Y"
-    "0x99": "Z"
-    "0x9A": "(", "0x9B": ")", "0x9C": ":", "0x9D": ";"
-    "0xA0": "a", "0xA1": "b", "0xA2": "c", "0xA3": "d", "0xA4": "e"
-    "0xA5": "f", "0xA6": "g", "0xA7": "h", "0xA8": "i", "0xA9": "j"
-    "0xAA": "k", "0xAB": "l", "0xAC": "m", "0xAD": "n", "0xAE": "o"
-    "0xAF": "p", "0xB0": "q", "0xB1": "r", "0xB2": "s", "0xB3": "t"
-    "0xB4": "u", "0xB5": "v", "0xB6": "w", "0xB7": "x", "0xB8": "y"
-    "0xB9": "z"
-    "0xE1": "P", "0xE2": "K", "0xE3": "M", "0xE4": "N"
-    "0xE6": "r", "0xE7": "m"
-    "0xF7": "♂", "0xF8": "♀"
-    "0xFF": ""
+// ===== EVENT SYSTEM (Simplified) =====
+events: {
+    onLoad: "log('Pokemon Red/Blue Enhanced Mapper loaded successfully')"
+
+    onPropertyChanged: """
+    if (property.name == "teamCount") {
+        log("Team size changed to: " + property.value)
+    }
+    """
+
+    custom: {
+        pokemon_fainted: {
+            trigger: "pokemon1Hp == 0 && pokemon1MaxHp > 0"
+            action: "log('Warning: First Pokemon has fainted!')"
+            dependencies: ["pokemon1Hp", "pokemon1MaxHp"]
+        }
+
+        badge_earned: {
+            trigger: "badgeCount > 0"
+            action: "log('Badge progress: ' + badgeCount + '/8')"
+            dependencies: ["badgeCount"]
+        }
+
+        level_up: {
+            trigger: "pokemon1Level > 50"
+            action: "log('High level Pokemon detected!')"
+            dependencies: ["pokemon1Level"]
+        }
+
+        critical_health: {
+            trigger: "pokemon1Critical == true"
+            action: "log('Pokemon at critical health!')"
+            dependencies: ["pokemon1Critical"]
+        }
+    }
 }
 
-// Version history
-changelog: [
-    {
-        version: "2.0.0"
-        date: "2024-01-15"
-        changes: [
-            "Added enhanced property types (enum, flags, percentage)",
-            "Implemented property validation and constraints",
-            "Added property freezing capabilities",
-            "Introduced computed properties",
-            "Added property groups for better organization",
-            "Enhanced UI hints and display formatting",
-            "Added comprehensive Pokemon species definitions",
-            "Implemented battle type and location enums"
-        ]
-    },
-    {
-        version: "1.0.0"
-        date: "2023-12-01"
-        changes: [
-            "Initial enhanced mapper release",
-            "Basic property definitions",
-            "Character map support"
-        ]
-    }
-]
+// ===== DEBUG CONFIGURATION =====
+debug: {
+    enabled: false
+    logLevel: "info"
+    logProperties: ["teamCount", "pokemon1Species", "battleType"]
+    benchmarkProperties: ["pokemon1Species", "badgeCount"]
+
+    hotReload: true
+    typeChecking: true
+    memoryDumps: false
+}

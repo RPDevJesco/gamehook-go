@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokemon Red/Blue Memory Debugger</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 20px;
+      margin: 0;
+    }
+    .debug-section {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    .hex-display {
+      background: #000;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .address {
+      color: #4CAF50;
+      font-weight: bold;
+    }
+    .byte {
+      color: #2196F3;
+      margin-right: 2px;
+    }
+    .ascii {
+      color: #FF9800;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .error {
+      color: #f44336;
+      background: rgba(244, 67, 54, 0.1);
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .success {
+      color: #4CAF50;
+      background: rgba(76, 175, 80, 0.1);
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .memory-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+    }
+    .memory-table th, .memory-table td {
+      border: 1px solid #444;
+      padding: 8px;
+      text-align: left;
+    }
+    .memory-table th {
+      background: #333;
+    }
+  </style>
+</head>
+<body>
+<h1>🔍 Pokemon Red/Blue Memory Debugger</h1>
+<p>This tool helps debug memory reading issues by examining raw memory values.</p>
+
+<div class="debug-section">
+  <h2>Connection Status</h2>
+  <div id="connection-status">Checking connection...</div>
+  <button onclick="testConnection()">Test Connection</button>
+</div>
+
+<div class="debug-section">
+  <h2>Known Memory Addresses (Pokemon Red/Blue)</h2>
+  <table class="memory-table">
+    <thead>
+    <tr>
+      <th>Property</th>
+      <th>Address</th>
+      <th>Type</th>
+      <th>Length</th>
+      <th>Description</th>
+      <th>Action</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+      <td>Player Name</td>
+      <td>0xD158</td>
+      <td>String</td>
+      <td>11 bytes</td>
+      <td>Trainer name</td>
+      <td><button onclick="readMemory('0xD158', 11, 'playerName')">Read</button></td>
+    </tr>
+    <tr>
+      <td>Rival Name</td>
+      <td>0xD34A</td>
+      <td>String</td>
+      <td>8 bytes</td>
+      <td>Rival name</td>
+      <td><button onclick="readMemory('0xD34A', 8, 'rivalName')">Read</button></td>
+    </tr>
+    <tr>
+      <td>Team Count</td>
+      <td>0xD163</td>
+      <td>uint8</td>
+      <td>1 byte</td>
+      <td>Pokemon in party</td>
+      <td><button onclick="readMemory('0xD163', 1, 'teamCount')">Read</button></td>
+    </tr>
+    <tr>
+      <td>Pokemon 1 Species</td>
+      <td>0xD16B</td>
+      <td>uint8</td>
+      <td>1 byte</td>
+      <td>First Pokemon species</td>
+      <td><button onclick="readMemory('0xD16B', 1, 'pokemon1Species')">Read</button></td>
+    </tr>
+    <tr>
+      <td>Pokemon 1 Level</td>
+      <td>0xD18C</td>
+      <td>uint8</td>
+      <td>1 byte</td>
+      <td>First Pokemon level</td>
+      <td><button onclick="readMemory('0xD18C', 1, 'pokemon1Level')">Read</button></td>
+    </tr>
+    <tr>
+      <td>Money</td>
+      <td>0xD347</td>
+      <td>BCD</td>
+      <td>3 bytes</td>
+      <td>Player money (BCD)</td>
+      <td><button onclick="readMemory('0xD347', 3, 'money')">Read</button></td>
+    </tr>
+    </tbody>
+  </table>
+  <button onclick="readAllKnownAddresses()">Read All Addresses</button>
+</div>
+
+<div class="debug-section">
+  <h2>Custom Memory Reader</h2>
+  <label>Address (hex): <input type="text" id="custom-address" value="0xD158" placeholder="0xD158"></label>
+  <label>Length (bytes): <input type="number" id="custom-length" value="16" min="1" max="256"></label>
+  <button onclick="readCustomMemory()">Read Memory</button>
+</div>
+
+<div class="debug-section">
+  <h2>Memory Analysis Results</h2>
+  <div id="memory-results">No data read yet.</div>
+</div>
+
+<div class="debug-section">
+  <h2>Character Mapping Test</h2>
+  <div id="char-mapping-results">
+    <p>This will show how bytes map to characters using Pokemon's character encoding.</p>
+  </div>
+</div>
+
+<script>
+  const baseUrl = 'http://localhost:8080';
+
+  // Pokemon Red/Blue character mapping
+  const pokemonCharMap = {
+    0x50: " ",
+    0x80: "A", 0x81: "B", 0x82: "C", 0x83: "D", 0x84: "E",
+    0x85: "F", 0x86: "G", 0x87: "H", 0x88: "I", 0x89: "J",
+    0x8A: "K", 0x8B: "L", 0x8C: "M", 0x8D: "N", 0x8E: "O",
+    0x8F: "P", 0x90: "Q", 0x91: "R", 0x92: "S", 0x93: "T",
+    0x94: "U", 0x95: "V", 0x96: "W", 0x97: "X", 0x98: "Y",
+    0x99: "Z",
+    0xA0: "a", 0xA1: "b", 0xA2: "c", 0xA3: "d", 0xA4: "e",
+    0xA5: "f", 0xA6: "g", 0xA7: "h", 0xA8: "i", 0xA9: "j",
+    0xAA: "k", 0xAB: "l", 0xAC: "m", 0xAD: "n", 0xAE: "o",
+    0xAF: "p", 0xB0: "q", 0xB1: "r", 0xB2: "s", 0xB3: "t",
+    0xB4: "u", 0xB5: "v", 0xB6: "w", 0xB7: "x", 0xB8: "y",
+    0xB9: "z",
+    0xFF: "" // Terminator
+  };
+
+  async function testConnection() {
+    const statusDiv = document.getElementById('connection-status');
+    statusDiv.innerHTML = 'Testing...';
+
+    try {
+      const response = await fetch(`${baseUrl}/api/mapper`);
+      if (response.ok) {
+        const data = await response.json();
+        statusDiv.innerHTML = `<div class="success">✅ Connected! Current mapper: ${data.name || 'Unknown'}</div>`;
+      } else {
+        statusDiv.innerHTML = `<div class="error">❌ HTTP Error: ${response.status}</div>`;
+      }
+    } catch (error) {
+      statusDiv.innerHTML = `<div class="error">❌ Connection Failed: ${error.message}</div>`;
+    }
+  }
+
+  async function readMemory(address, length, name) {
+    const resultsDiv = document.getElementById('memory-results');
+
+    try {
+      // Convert hex address to decimal for API call
+      const addr = parseInt(address, 16);
+      const response = await fetch(`${baseUrl}/api/memory/${addr}/${length}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // For now, we'll simulate reading data since the API might not have raw memory access
+      // In reality, you'd get actual bytes from the API
+      displayMemoryData(address, length, name, null);
+
+    } catch (error) {
+      resultsDiv.innerHTML += `<div class="error">❌ Failed to read ${name}: ${error.message}</div>`;
+    }
+  }
+
+  async function readCustomMemory() {
+    const address = document.getElementById('custom-address').value;
+    const length = parseInt(document.getElementById('custom-length').value);
+
+    if (!address || !length) {
+      alert('Please enter both address and length');
+      return;
+    }
+
+    await readMemory(address, length, 'Custom');
+  }
+
+  function displayMemoryData(address, length, name, rawBytes) {
+    const resultsDiv = document.getElementById('memory-results');
+
+    // Since we can't get raw bytes easily, let's read the property value instead
+    readPropertyValue(name);
+  }
+
+  async function readPropertyValue(propertyName) {
+    const resultsDiv = document.getElementById('memory-results');
+
+    try {
+      const response = await fetch(`${baseUrl}/api/properties/${propertyName}`);
+      if (response.ok) {
+        const data = await response.json();
+
+        resultsDiv.innerHTML += `
+                        <div class="success">
+                            <h4>✅ ${propertyName}</h4>
+                            <p><strong>Value:</strong> ${JSON.stringify(data.value)}</p>
+                            <p><strong>Raw Response:</strong></p>
+                            <div class="hex-display">${JSON.stringify(data, null, 2)}</div>
+                        </div>
+                    `;
+      } else {
+        resultsDiv.innerHTML += `<div class="error">❌ Failed to read property ${propertyName}: HTTP ${response.status}</div>`;
+      }
+    } catch (error) {
+      resultsDiv.innerHTML += `<div class="error">❌ Error reading ${propertyName}: ${error.message}</div>`;
+    }
+  }
+
+  async function readAllKnownAddresses() {
+    const properties = ['playerName', 'rivalName', 'teamCount', 'pokemon1Species', 'pokemon1Level', 'money'];
+
+    document.getElementById('memory-results').innerHTML = '<h3>Reading all known addresses...</h3>';
+
+    for (const prop of properties) {
+      await readPropertyValue(prop);
+      // Small delay to avoid overwhelming the API
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  function bytesToString(bytes) {
+    let result = '';
+    for (let byte of bytes) {
+      if (byte === 0xFF || byte === 0x00) break; // Terminator
+      if (pokemonCharMap[byte]) {
+        result += pokemonCharMap[byte];
+      } else {
+        result += `[${byte.toString(16).toUpperCase().padStart(2, '0')}]`;
+      }
+    }
+    return result;
+  }
+
+  // Test connection on page load
+  window.addEventListener('DOMContentLoaded', () => {
+    testConnection();
+  });
+</script>
+</body>
+</html>

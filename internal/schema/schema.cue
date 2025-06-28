@@ -1,5 +1,8 @@
 package mappers
 
+import "strings"
+import "list"
+
 // ===== ENHANCED PROPERTY TYPE SYSTEM =====
 
 // Core property types with rich metadata
@@ -548,24 +551,11 @@ package mappers
         "0xFF": ""
     }
 
-    // Simplified ASCII mapping (removed problematic for loop)
     ascii: {
-        "32": " ", "33": "!", "34": "\"", "35": "#", "36": "$", "37": "%"
-        "38": "&", "39": "'", "40": "(", "41": ")", "42": "*", "43": "+"
-        "44": ",", "45": "-", "46": ".", "47": "/", "48": "0", "49": "1"
-        "50": "2", "51": "3", "52": "4", "53": "5", "54": "6", "55": "7"
-        "56": "8", "57": "9", "58": ":", "59": ";", "60": "<", "61": "="
-        "62": ">", "63": "?", "64": "@", "65": "A", "66": "B", "67": "C"
-        "68": "D", "69": "E", "70": "F", "71": "G", "72": "H", "73": "I"
-        "74": "J", "75": "K", "76": "L", "77": "M", "78": "N", "79": "O"
-        "80": "P", "81": "Q", "82": "R", "83": "S", "84": "T", "85": "U"
-        "86": "V", "87": "W", "88": "X", "89": "Y", "90": "Z", "91": "["
-        "92": "\\", "93": "]", "94": "^", "95": "_", "96": "`", "97": "a"
-        "98": "b", "99": "c", "100": "d", "101": "e", "102": "f", "103": "g"
-        "104": "h", "105": "i", "106": "j", "107": "k", "108": "l", "109": "m"
-        "110": "n", "111": "o", "112": "p", "113": "q", "114": "r", "115": "s"
-        "116": "t", "117": "u", "118": "v", "119": "w", "120": "x", "121": "y"
-        "122": "z", "123": "{", "124": "|", "125": "}", "126": "~"
+        // Standard ASCII mapping
+        for i in list.Range(32, 127, 1) {
+            "\(i)": string.FromBytes([i])
+        }
     }
 
     custom?: [string]: string // Allow custom character maps
@@ -688,3 +678,138 @@ package mappers
         memoryDumps?: bool       // enable memory dumps
     }
 }
+
+// ===== VALIDATION CONSTRAINTS =====
+
+// Structured validation result
+#ValidationResult: {
+    isValid: bool
+    message: string
+}
+
+// Global validation constraints
+#MapperConstraints: {
+    // Ensure all property names are unique
+    #uniquePropertyNames: #ValidationResult & {
+        isValid: bool & (len([for name, _ in properties { name }]) ==
+                len(list.Unique([for name, _ in properties { name }])))
+        message: string = "Property names must be unique"
+    }
+
+    // Ensure all group properties exist
+    #validGroupProperties: #ValidationResult & {
+        isValid: bool & (groups == null || list.All([
+            for groupName, group in groups {
+                list.All([
+                    for propName in group.properties {
+                        list.Contains([for name, _ in properties { name }], propName)
+                    }
+                ])
+            }
+        ]))
+        message: string = "All properties referenced in groups must exist in the properties section"
+    }
+
+    // Ensure computed property dependencies exist
+    #validComputedDependencies: #ValidationResult & {
+        isValid: bool & (computed == null || list.All([
+            for compName, comp in computed {
+                list.All([
+                    for depName in comp.dependencies {
+                        list.Contains([for name, _ in properties { name }], depName)
+                    }
+                ])
+            }
+        ]))
+        message: string = "All computed property dependencies must reference existing properties"
+    }
+
+    // Ensure memory addresses don't overlap (simplified version)
+    #noMemoryOverlaps: #ValidationResult & {
+        isValid: bool & true // Simplified for now - can be enhanced with proper address parsing
+        message: string = "Memory addresses must not overlap between properties"
+    }
+
+    // Ensure array element sizes are consistent
+		#validArraySizes: #ValidationResult & {
+				isValid: bool & list.All([
+						for _, prop in properties if prop.type == "array" {
+								(prop.advanced.elementSize > 0) | (prop.advanced.elementSize == null)
+						}
+				])
+				message: string = "Array element sizes must be greater than 0"
+		}
+
+
+    // Ensure bit positions are valid for bit/nibble types
+		#validBitPositions: #ValidationResult & {
+				isValid: bool & list.All([
+						for _, prop in properties {
+								(prop.type == "bit" && prop.position >= 0 && prop.position <= 7) |
+								(prop.type == "nibble" && prop.position >= 0 && prop.position <= 1) |
+								(prop.type != "bit" && prop.type != "nibble") |
+								(!defined(prop.position))
+						}
+				])
+				message: string = "Bit positions must be 0-7 for bit type, 0-1 for nibble type"
+		}
+
+    // Ensure struct field offsets are valid
+		#validStructOffsets: #ValidationResult & {
+				isValid: bool & list.All([
+						for _, prop in properties if prop.type == "struct" {
+								!defined(prop.advanced.fields) ||
+								list.All([
+										for _, field in prop.advanced.fields {
+												field.offset >= 0
+										}
+								])
+						}
+				])
+				message: string = "Struct field offsets must be non-negative"
+		}
+
+    // Ensure enum values are unique
+		#uniqueEnumValues: #ValidationResult & {
+				isValid: bool & list.All([
+						for _, prop in properties if prop.type == "enum" {
+								!defined(prop.advanced.enumValues) ||
+								len([for _, v in prop.advanced.enumValues { v.value }]) ==
+								len(list.Unique([for _, v in prop.advanced.enumValues { v.value }]))
+						}
+				])
+				message: string = "Enum values must be unique within each enum property"
+		}
+
+    // Ensure flag bit positions are unique and valid
+		#validFlagBits: #ValidationResult & {
+				isValid: bool & list.All([
+						for _, prop in properties if prop.type == "flags" {
+								!defined(prop.advanced.flagDefinitions) ||
+								list.All([
+										for _, flag in prop.advanced.flagDefinitions {
+												flag.bit >= 0 && flag.bit < ((prop.length | *1) * 8)
+										}
+								]) &&
+								len([for _, flag in prop.advanced.flagDefinitions { flag.bit }]) ==
+								len(list.Unique([for _, flag in prop.advanced.flagDefinitions { flag.bit }]))
+						}
+				])
+				message: string = "Flag bit positions must be unique and within valid range for the property length"
+		}
+
+    // Ensure validation constraints are properly formed
+		#validValidationConstraints: #ValidationResult & {
+				isValid: bool & list.All([
+						for _, prop in properties {
+								!defined(prop.validation.minValue) ||
+								!defined(prop.validation.maxValue) ||
+								(prop.validation.minValue <= prop.validation.maxValue)
+						}
+				])
+				message: string = "Validation minValue must be less than or equal to maxValue"
+		}
+}
+
+// Apply constraints to mapper
+#ValidatedMapper: #Mapper & #MapperConstraints

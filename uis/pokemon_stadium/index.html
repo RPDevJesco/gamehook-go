@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Stadium N64 Enhanced Mapper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .property {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .property:last-child {
+            border-bottom: none;
+        }
+
+        .property-name {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .property-value {
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 6px;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .status-active { background: #4CAF50; color: white; }
+        .status-inactive { background: #9E9E9E; color: white; }
+        .status-warning { background: #FF9800; color: white; }
+        .status-danger { background: #F44336; color: white; }
+        .status-info { background: #2196F3; color: white; }
+        .status-purple { background: #9C27B0; color: white; }
+
+        .pokemon-team {
+            display: grid;
+            gap: 15px;
+        }
+
+        .pokemon-card {
+            background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .pokemon-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .pokemon-name {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .pokemon-level {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+        }
+
+        .hp-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+            transition: width 0.3s ease;
+        }
+
+        .progress-bars {
+            display: grid;
+            gap: 10px;
+        }
+
+        .progress-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-label {
+            min-width: 80px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            flex: 1;
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .cup-poke { background: #4CAF50; }
+        .cup-prime { background: #F44336; }
+        .cup-ultra { background: #FF9800; }
+        .cup-master { background: #9C27B0; }
+
+        .camera-position {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .coord {
+            text-align: center;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .coord-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 2px;
+        }
+
+        .coord-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 10px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .battle-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .update-info {
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .active-battle {
+            animation: pulse 2s infinite;
+        }
+
+        .collapsible {
+            margin-top: 10px;
+        }
+
+        .collapsible-header {
+            background: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+            font-weight: 500;
+            color: #666;
+        }
+
+        .collapsible-header:hover {
+            background: #e8e8e8;
+        }
+
+        .collapsible-content {
+            display: none;
+            padding: 10px 0;
+        }
+
+        .collapsible.expanded .collapsible-content {
+            display: block;
+        }
+
+        .memory-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🎮 Pokemon Stadium N64 Enhanced Mapper</h1>
+    <p>Real-time Game State Monitor & Memory Analysis Dashboard</p>
+</div>
+
+<div class="dashboard">
+    <!-- Game State Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">🎮</span>
+            <span class="card-title">Game State</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Game Mode</span>
+            <span class="property-value status-info" id="gameMode">Stadium</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Current Menu</span>
+            <span class="property-value status-inactive" id="currentMenu">0x80100004</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Battle State</span>
+            <span class="property-value status-danger" id="battleState">Battle Active</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Battle Turn</span>
+            <span class="property-value" id="battleTurn">15</span>
+        </div>
+    </div>
+
+    <!-- Player Profile Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">👤</span>
+            <span class="card-title">Player Profile</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Player Name</span>
+            <span class="property-value status-info" id="playerName">ASH</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Battle Mode</span>
+            <span class="property-value status-active" id="battleMode">Stadium</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Current Cup</span>
+            <span class="property-value status-warning" id="currentCup">Poke Cup</span>
+        </div>
+    </div>
+
+    <!-- Player Team Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">⭐</span>
+            <span class="card-title">Player Team</span>
+        </div>
+        <div class="pokemon-team">
+            <div class="pokemon-card">
+                <div class="pokemon-header">
+                    <span class="pokemon-name" id="pokemon1Name">Pikachu</span>
+                    <span class="pokemon-level" id="pokemon1Level">Lv 45</span>
+                </div>
+                <div class="property">
+                    <span class="property-name">HP</span>
+                    <span class="property-value" id="pokemon1HP">120/140</span>
+                </div>
+                <div class="hp-bar">
+                    <div class="hp-fill" id="pokemon1HPBar" style="width: 86%;"></div>
+                </div>
+            </div>
+
+            <div class="collapsible">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    ▼ Pokemon #2-3
+                </div>
+                <div class="collapsible-content">
+                    <div class="pokemon-card">
+                        <div class="pokemon-header">
+                            <span class="pokemon-name" id="pokemon2Name">Charizard</span>
+                            <span class="pokemon-level" id="pokemon2Level">Lv 52</span>
+                        </div>
+                    </div>
+                    <div class="pokemon-card">
+                        <div class="pokemon-header">
+                            <span class="pokemon-name" id="pokemon3Name">Blastoise</span>
+                            <span class="pokemon-level" id="pokemon3Level">Lv 48</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enemy Team Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">👹</span>
+            <span class="card-title">Enemy Team</span>
+        </div>
+        <div class="pokemon-card" style="border-left-color: #FF9800;">
+            <div class="pokemon-header">
+                <span class="pokemon-name" id="enemyPokemon1Name">Mewtwo</span>
+                <span class="pokemon-level" id="enemyPokemon1Level">Lv 70</span>
+            </div>
+            <div class="property">
+                <span class="property-name">HP</span>
+                <span class="property-value" id="enemyPokemon1HP">180/220</span>
+            </div>
+            <div class="hp-bar">
+                <div class="hp-fill" id="enemyPokemon1HPBar" style="width: 82%; background: linear-gradient(90deg, #FF6600 0%, #FF9800 100%);"></div>
+            </div>
+        </div>
+
+        <div class="battle-indicator status-danger active-battle">
+            ⚔️ Active Battle
+        </div>
+    </div>
+
+    <!-- Stadium Progress Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">🏆</span>
+            <span class="card-title">Stadium Progress</span>
+        </div>
+        <div class="progress-bars">
+            <div class="progress-item">
+                <span class="progress-label">🏆 Poke Cup</span>
+                <div class="progress-bar">
+                    <div class="progress-fill cup-poke" style="width: 75%;"></div>
+                </div>
+                <span>3/4</span>
+            </div>
+            <div class="progress-item">
+                <span class="progress-label">👑 Prime Cup</span>
+                <div class="progress-bar">
+                    <div class="progress-fill cup-prime" style="width: 50%;"></div>
+                </div>
+                <span>2/4</span>
+            </div>
+            <div class="progress-item">
+                <span class="progress-label">⚡ Ultra Cup</span>
+                <div class="progress-bar">
+                    <div class="progress-fill cup-ultra" style="width: 25%;"></div>
+                </div>
+                <span>1/4</span>
+            </div>
+            <div class="progress-item">
+                <span class="progress-label">🔮 Master Ball</span>
+                <div class="progress-bar">
+                    <div class="progress-fill cup-master" style="width: 0%;"></div>
+                </div>
+                <span>0/4</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Analysis Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">📊</span>
+            <span class="card-title">Team Analysis</span>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value" id="teamSize">3</div>
+                <div class="stat-label">Team Size</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="avgLevel">48.3</div>
+                <div class="stat-label">Avg Level</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="completionPercent">37.5%</div>
+                <div class="stat-label">Stadium Complete</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="totalProgress">6/16</div>
+                <div class="stat-label">Total Progress</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini-Games Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">🎯</span>
+            <span class="card-title">Mini-Games</span>
+        </div>
+        <div class="property">
+            <span class="property-name">High Score</span>
+            <span class="property-value status-purple" id="miniGameScore">15,420</span>
+        </div>
+        <div class="memory-info">
+            Address: 0x80600000<br>
+            Type: uint32<br>
+            Freezable: Yes
+        </div>
+    </div>
+
+    <!-- 3D Graphics Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">📹</span>
+            <span class="card-title">3D Graphics</span>
+        </div>
+        <div class="camera-position">
+            <div class="coord">
+                <div class="coord-label">X</div>
+                <div class="coord-value" id="cameraX">-15.42</div>
+            </div>
+            <div class="coord">
+                <div class="coord-label">Y</div>
+                <div class="coord-value" id="cameraY">8.67</div>
+            </div>
+            <div class="coord">
+                <div class="coord-label">Z</div>
+                <div class="coord-value" id="cameraZ">22.31</div>
+            </div>
+        </div>
+        <div class="property" style="margin-top: 15px;">
+            <span class="property-name">Camera Distance</span>
+            <span class="property-value status-info" id="cameraDistance">28.95 units</span>
+        </div>
+    </div>
+
+    <!-- Memory Layout Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-icon">💾</span>
+            <span class="card-title">Memory Layout</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Platform</span>
+            <span class="property-value status-info">Nintendo 64</span>
+        </div>
+        <div class="property">
+            <span class="property-name">Endian</span>
+            <span class="property-value">Big</span>
+        </div>
+        <div class="property">
+            <span class="property-name">RDRAM Size</span>
+            <span class="property-value">8MB</span>
+        </div>
+        <div class="memory-info">
+            Base: 0x80000000<br>
+            Game State: 0x80100000<br>
+            Battle System: 0x80300000<br>
+            Pokemon Data: 0x80400000
+        </div>
+    </div>
+</div>
+
+<div class="update-info">
+    <p>🔄 Real-time monitoring active • Last update: <span id="lastUpdate">Just now</span></p>
+    <p>Pokemon Stadium N64 Enhanced Mapper v2.0.0 • GameHook Compatible</p>
+</div>
+
+<script>
+    // Simulate real-time updates
+    function updateTimestamp() {
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    }
+
+    function toggleCollapsible(header) {
+        const collapsible = header.parentElement;
+        collapsible.classList.toggle('expanded');
+
+        const arrow = header.textContent.charAt(0);
+        header.textContent = header.textContent.replace(arrow, arrow === '▼' ? '▶' : '▼');
+    }
+
+    // Pokemon species data
+    const pokemonSpecies = {
+        1: { name: "Bulbasaur", color: "#78C850" },
+        4: { name: "Charmander", color: "#F08030" },
+        6: { name: "Charizard", color: "#F08030" },
+        7: { name: "Squirtle", color: "#6890F0" },
+        9: { name: "Blastoise", color: "#6890F0" },
+        25: { name: "Pikachu", color: "#F8D030" },
+        150: { name: "Mewtwo", color: "#A040A0" },
+        151: { name: "Mew", color: "#FF1493" }
+    };
+
+    // Battle states
+    const battleStates = {
+        0: { name: "No Battle", class: "status-inactive" },
+        1: { name: "Initializing", class: "status-warning" },
+        2: { name: "Pokemon Selection", class: "status-info" },
+        3: { name: "Battle Active", class: "status-danger" },
+        4: { name: "Move Selection", class: "status-warning" },
+        5: { name: "Animation", class: "status-purple" },
+        6: { name: "Battle End", class: "status-active" }
+    };
+
+    // Simulate data updates
+    function simulateUpdates() {
+        // Update battle turn
+        const currentTurn = parseInt(document.getElementById('battleTurn').textContent);
+        if (Math.random() < 0.3) {
+            document.getElementById('battleTurn').textContent = currentTurn + 1;
+        }
+
+        // Update HP values
+        if (Math.random() < 0.2) {
+            const pokemon1HP = document.getElementById('pokemon1HP');
+            const current = parseInt(pokemon1HP.textContent.split('/')[0]);
+            const max = parseInt(pokemon1HP.textContent.split('/')[1]);
+            const newHP = Math.max(0, current + (Math.random() < 0.5 ? -Math.floor(Math.random() * 10) : Math.floor(Math.random() * 5)));
+            pokemon1HP.textContent = `${newHP}/${max}`;
+
+            const percentage = (newHP / max) * 100;
+            document.getElementById('pokemon1HPBar').style.width = percentage + '%';
+        }
+
+        // Update camera position
+        if (Math.random() < 0.4) {
+            const cameraX = (Math.random() - 0.5) * 50;
+            const cameraY = (Math.random() - 0.5) * 30;
+            const cameraZ = (Math.random() - 0.5) * 60;
+
+            document.getElementById('cameraX').textContent = cameraX.toFixed(2);
+            document.getElementById('cameraY').textContent = cameraY.toFixed(2);
+            document.getElementById('cameraZ').textContent = cameraZ.toFixed(2);
+
+            const distance = Math.sqrt(cameraX * cameraX + cameraY * cameraY + cameraZ * cameraZ);
+            document.getElementById('cameraDistance').textContent = distance.toFixed(2) + ' units';
+        }
+
+        updateTimestamp();
+    }
+
+    // Initialize expanded collapsibles
+    document.querySelectorAll('.collapsible').forEach(collapsible => {
+        if (!collapsible.classList.contains('expanded')) {
+            const header = collapsible.querySelector('.collapsible-header');
+            if (header.textContent.includes('▼')) {
+                header.textContent = header.textContent.replace('▼', '▶');
+            }
+        }
+    });
+
+    // Start simulation
+    setInterval(simulateUpdates, 2000);
+    updateTimestamp();
+
+    // Console logging for events
+    console.log('Pokemon Stadium N64 Enhanced Mapper loaded successfully');
+    console.log('Battle state changed to: Battle Active');
+    console.log('Stadium cup progress: 6/16');
+    console.log('High level team detected! Average level: 48.3');
+</script>
+</body>
+</html>

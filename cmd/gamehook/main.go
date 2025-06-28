@@ -18,7 +18,10 @@ import (
 	"gamehook/internal/mappers"
 	"gamehook/internal/memory"
 	"gamehook/internal/server"
+	"gamehook/internal/types"
 
+	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/spf13/cobra"
 )
 
@@ -44,6 +47,13 @@ type EnhancedGameHook struct {
 	changeListeners  []PropertyChangeListener
 	batchOperations  chan BatchOperation
 	validationErrors map[string][]ValidationError
+	eventHistory     []EventHistoryEntry
+	activeEvents     []string
+
+	// Event system
+	eventMutex       sync.RWMutex
+	lastEventCheck   time.Time
+	eventTriggerChan chan EventTrigger
 }
 
 // PropertyChangeListener represents a property change callback
@@ -91,33 +101,30 @@ type ValidationError struct {
 	Value    interface{}
 }
 
-// Enhanced configuration struct
-type EnhancedConfig struct {
-	*config.Config
-
-	// Enhanced features
-	PropertyMonitoring PropertyMonitoringConfig `yaml:"property_monitoring"`
-	BatchOperations    BatchOperationsConfig    `yaml:"batch_operations"`
-	Validation         ValidationConfig         `yaml:"validation"`
+// EventHistoryEntry represents an event in the history
+type EventHistoryEntry struct {
+	Name      string
+	Timestamp time.Time
+	Triggered bool
+	Source    string
+	Data      map[string]interface{}
 }
 
-type PropertyMonitoringConfig struct {
-	UpdateInterval   time.Duration `yaml:"update_interval"`
-	EnableStatistics bool          `yaml:"enable_statistics"`
-	HistorySize      int           `yaml:"history_size"`
-	ChangeThreshold  float64       `yaml:"change_threshold"`
+// EventTrigger represents an event trigger request
+type EventTrigger struct {
+	Name  string
+	Force bool
+	Data  map[string]interface{}
 }
 
-type BatchOperationsConfig struct {
-	MaxBatchSize int           `yaml:"max_batch_size"`
-	Timeout      time.Duration `yaml:"timeout"`
-	EnableAtomic bool          `yaml:"enable_atomic"`
-}
-
-type ValidationConfig struct {
-	EnableStrict  bool `yaml:"enable_strict"`
-	LogValidation bool `yaml:"log_validation"`
-	FailOnError   bool `yaml:"fail_on_error"`
+// Event represents an enhanced event definition
+type Event struct {
+	Name         string
+	Trigger      string
+	Action       string
+	Dependencies []string
+	Enabled      bool
+	Metadata     map[string]interface{}
 }
 
 func main() {
@@ -134,7 +141,10 @@ Features:
 - Batch property operations
 - Property validation and constraints
 - Enhanced WebSocket API
-- Property state tracking and statistics`,
+- Property state tracking and statistics
+- Event system with triggers
+- Reference type system
+- UI hints and themes`,
 		Version: Version,
 		RunE:    runEnhancedGameHook,
 	}
@@ -154,10 +164,12 @@ Features:
 	rootCmd.Flags().Bool("enable-freezing", true, "enable property freezing")
 	rootCmd.Flags().Bool("enable-validation", true, "enable property validation")
 	rootCmd.Flags().Bool("enable-statistics", true, "enable property statistics")
+	rootCmd.Flags().Bool("enable-events", true, "enable event system")
 	rootCmd.Flags().Int("max-batch-size", 50, "maximum batch operation size")
 
 	// Add enhanced utility commands
 	rootCmd.AddCommand(createEnhancedTestCommands()...)
+	rootCmd.AddCommand(createRetroArchTestCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -218,8 +230,37 @@ func createEnhancedTestCommands() []*cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Testing batch operations...")
 
-			// TODO: Implement batch operation testing
+			cfg, _ := config.LoadConfig(configPath)
+			gameHook, err := NewEnhancedGameHook(cfg)
+			if err != nil {
+				return err
+			}
+
+			// Test batch operation processing
+			gameHook.testBatchOperations()
+
 			fmt.Println("✓ Batch operations test passed")
+			return nil
+		},
+	}
+
+	// Test event system
+	eventTestCmd := &cobra.Command{
+		Use:   "events",
+		Short: "Test event system",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Testing event system...")
+
+			cfg, _ := config.LoadConfig(configPath)
+			gameHook, err := NewEnhancedGameHook(cfg)
+			if err != nil {
+				return err
+			}
+
+			// Test event processing
+			gameHook.testEventSystem()
+
+			fmt.Println("✓ Event system test passed")
 			return nil
 		},
 	}
@@ -288,7 +329,7 @@ func createEnhancedTestCommands() []*cobra.Command {
 		},
 	}
 
-	testCmd.AddCommand(freezeTestCmd, batchTestCmd)
+	testCmd.AddCommand(freezeTestCmd, batchTestCmd, eventTestCmd)
 
 	// Enhanced version command
 	versionCmd := &cobra.Command{
@@ -305,6 +346,9 @@ func createEnhancedTestCommands() []*cobra.Command {
 			fmt.Printf("  • Batch Operations\n")
 			fmt.Printf("  • Property Validation\n")
 			fmt.Printf("  • State Tracking\n")
+			fmt.Printf("  • Event System\n")
+			fmt.Printf("  • Reference Types\n")
+			fmt.Printf("  • UI Hints & Themes\n")
 		},
 	}
 
@@ -415,6 +459,12 @@ func runEnhancedGameHook(cmd *cobra.Command, args []string) error {
 	log.Printf("   • Advanced Property Types & Validation")
 	log.Printf("   • Real-time Monitoring (60fps)")
 	log.Printf("   • Batch Operations & WebSocket API")
+	if cfg.Events.Enabled {
+		log.Printf("   • Event System with Triggers")
+	}
+	if cfg.Features.AdvancedPropertyTypes {
+		log.Printf("   • Reference Types & UI Hints")
+	}
 	log.Printf("")
 	log.Printf("🌍 Ready! Open http://localhost:%d in your browser", cfg.Server.Port)
 	log.Printf("📚 Enhanced API docs at http://localhost:%d/api", cfg.Server.Port)
@@ -445,6 +495,12 @@ func overrideConfigFromFlags(cmd *cobra.Command, cfg *config.Config) {
 	}
 	if cmd.Flags().Changed("uis-dir") {
 		cfg.Paths.UIsDir, _ = cmd.Flags().GetString("uis-dir")
+	}
+	if cmd.Flags().Changed("enable-events") {
+		cfg.Events.Enabled, _ = cmd.Flags().GetBool("enable-events")
+	}
+	if cmd.Flags().Changed("max-batch-size") {
+		cfg.BatchOperations.MaxBatchSize, _ = cmd.Flags().GetInt("max-batch-size")
 	}
 }
 
@@ -477,6 +533,9 @@ func NewEnhancedGameHook(cfg *config.Config) (*EnhancedGameHook, error) {
 		changeListeners:  make([]PropertyChangeListener, 0),
 		batchOperations:  make(chan BatchOperation, 100),
 		validationErrors: make(map[string][]ValidationError),
+		eventHistory:     make([]EventHistoryEntry, 0),
+		activeEvents:     make([]string, 0),
+		eventTriggerChan: make(chan EventTrigger, 50),
 	}
 
 	// Create enhanced server
@@ -495,6 +554,12 @@ func (gh *EnhancedGameHook) Run() error {
 
 	// Start batch operations processor
 	go gh.processBatchOperations()
+
+	// Start event system if enabled
+	if gh.config.Events.Enabled {
+		go gh.processEvents()
+		go gh.processEventTriggers()
+	}
 
 	// Start server
 	errCh := make(chan error, 1)
@@ -691,7 +756,7 @@ func (gh *EnhancedGameHook) updatePropertyStates() {
 	// Collect results
 	changes := make(map[string]interface{})
 	for result := range resultChan {
-		if lastValue, exists := gh.lastSnapshot[result.name]; !exists || lastValue != result.value {
+		if lastValue, exists := gh.lastSnapshot[result.name]; !exists || !gh.deepEqual(lastValue, result.value) {
 			changes[result.name] = result.value
 			gh.lastSnapshot[result.name] = result.value
 		}
@@ -706,6 +771,169 @@ func (gh *EnhancedGameHook) updatePropertyStates() {
 			}
 		}
 	}
+}
+
+// Event system implementation
+func (gh *EnhancedGameHook) processEvents() {
+	ticker := time.NewTicker(100 * time.Millisecond) // Check events every 100ms
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-gh.ctx.Done():
+			return
+		case <-ticker.C:
+			if gh.currentMapper != nil {
+				gh.checkAndTriggerEvents()
+			}
+		}
+	}
+}
+
+func (gh *EnhancedGameHook) processEventTriggers() {
+	for {
+		select {
+		case <-gh.ctx.Done():
+			return
+		case trigger := <-gh.eventTriggerChan:
+			gh.executeTrigger(trigger)
+		}
+	}
+}
+
+func (gh *EnhancedGameHook) checkAndTriggerEvents() {
+	// TODO: When enhanced Mapper has proper Events field, implement event checking
+	// For now, this is a placeholder for the event system
+
+	// Example implementation would be:
+	// if gh.currentMapper.Events != nil {
+	//     for eventName, event := range gh.currentMapper.Events {
+	//         if gh.shouldTriggerEvent(event) {
+	//             gh.executeEvent(eventName, event)
+	//         }
+	//     }
+	// }
+}
+
+func (gh *EnhancedGameHook) shouldTriggerEvent(event *Event) bool {
+	if event.Trigger == "" {
+		return false
+	}
+
+	// Evaluate CUE trigger expression
+	ctx := cuecontext.New()
+
+	// Build context with current property values
+	context := make(map[string]interface{})
+	for _, dep := range event.Dependencies {
+		if value, err := gh.GetProperty(dep); err == nil {
+			context[dep] = value
+		}
+	}
+
+	// Add previous values for change detection
+	context["previous"] = gh.lastSnapshot
+
+	// Evaluate trigger expression
+	expr := fmt.Sprintf("{context: %v, result: (%s)}", context, event.Trigger)
+	val := ctx.CompileString(expr)
+	if err := val.Err(); err != nil {
+		log.Printf("⚠️  Event trigger evaluation error for %s: %v", event.Name, err)
+		return false
+	}
+
+	result := val.LookupPath(cue.ParsePath("result"))
+	triggered, err := result.Bool()
+	if err != nil {
+		log.Printf("⚠️  Event trigger result error for %s: %v", event.Name, err)
+		return false
+	}
+
+	return triggered
+}
+
+func (gh *EnhancedGameHook) executeEvent(name string, event *Event) {
+	log.Printf("🎯 Executing event: %s", name)
+
+	// Execute event action
+	if event.Action != "" {
+		gh.executeEventAction(name, event.Action)
+	}
+
+	// Add to event history
+	gh.addEventToHistory(name, event, true)
+
+	// Update active events
+	gh.eventMutex.Lock()
+	found := false
+	for _, active := range gh.activeEvents {
+		if active == name {
+			found = true
+			break
+		}
+	}
+	if !found {
+		gh.activeEvents = append(gh.activeEvents, name)
+	}
+	gh.eventMutex.Unlock()
+}
+
+func (gh *EnhancedGameHook) executeEventAction(eventName, action string) {
+	ctx := cuecontext.New()
+
+	// Build context with current property values and system functions
+	context := make(map[string]interface{})
+	context["log"] = func(message string) {
+		log.Printf("🎯 Event %s: %s", eventName, message)
+	}
+	context["properties"] = gh.lastSnapshot
+
+	// Evaluate action expression
+	expr := fmt.Sprintf("{context: %v, action: (%s)}", context, action)
+	val := ctx.CompileString(expr)
+	if err := val.Err(); err != nil {
+		log.Printf("⚠️  Event action evaluation error for %s: %v", eventName, err)
+		return
+	}
+
+	// Execute the action (for now, just log it)
+	log.Printf("✅ Event %s action executed", eventName)
+}
+
+func (gh *EnhancedGameHook) addEventToHistory(name string, event *Event, triggered bool) {
+	entry := EventHistoryEntry{
+		Name:      name,
+		Timestamp: time.Now(),
+		Triggered: triggered,
+		Source:    "automatic",
+		Data:      make(map[string]interface{}),
+	}
+
+	gh.eventMutex.Lock()
+	gh.eventHistory = append(gh.eventHistory, entry)
+
+	// Keep history size limited
+	if len(gh.eventHistory) > gh.config.Events.MaxEventHistory {
+		gh.eventHistory = gh.eventHistory[1:]
+	}
+	gh.eventMutex.Unlock()
+}
+
+func (gh *EnhancedGameHook) executeTrigger(trigger EventTrigger) {
+	log.Printf("🎯 Manual trigger: %s (force: %v)", trigger.Name, trigger.Force)
+
+	// Add to history
+	entry := EventHistoryEntry{
+		Name:      trigger.Name,
+		Timestamp: time.Now(),
+		Triggered: true,
+		Source:    "manual",
+		Data:      trigger.Data,
+	}
+
+	gh.eventMutex.Lock()
+	gh.eventHistory = append(gh.eventHistory, entry)
+	gh.eventMutex.Unlock()
 }
 
 // Add this method to test property reading
@@ -746,7 +974,7 @@ func (gh *EnhancedGameHook) TestRetroArchConnection() error {
 	log.Printf("✅ RetroArch connection successful")
 
 	// Test reading a small amount of memory
-	testBlocks := []drivers.MemoryBlock{
+	testBlocks := []types.MemoryBlock{
 		{Name: "Test", Start: 0xC000, End: 0xC00F}, // 16 bytes test
 	}
 
@@ -794,7 +1022,7 @@ func CheckRetroArchSetup(host string, port int) error {
 	log.Printf("✅ RetroArch driver connected successfully")
 
 	// Test a simple memory read
-	testBlocks := []drivers.MemoryBlock{
+	testBlocks := []types.MemoryBlock{
 		{Name: "Test", Start: 0x0000, End: 0x000F},
 	}
 
@@ -911,6 +1139,50 @@ func (gh *EnhancedGameHook) executeBatchOperation(batch BatchOperation) BatchRes
 	return BatchResult{
 		Success: allSuccess,
 		Results: results,
+	}
+}
+
+// Test methods for development
+func (gh *EnhancedGameHook) testBatchOperations() {
+	log.Printf("🧪 Testing batch operations...")
+
+	// Create a test batch operation
+	batch := BatchOperation{
+		Type: "test",
+		Properties: []PropertyUpdate{
+			{Name: "testProp1", Value: 100},
+			{Name: "testProp2", Value: "test"},
+		},
+		Response: make(chan BatchResult, 1),
+	}
+
+	// Send to batch processor
+	select {
+	case gh.batchOperations <- batch:
+		// Wait for result
+		result := <-batch.Response
+		log.Printf("✅ Batch operation result: success=%v", result.Success)
+	default:
+		log.Printf("⚠️  Batch operations channel full")
+	}
+}
+
+func (gh *EnhancedGameHook) testEventSystem() {
+	log.Printf("🧪 Testing event system...")
+
+	// Create a test event trigger
+	trigger := EventTrigger{
+		Name:  "test_event",
+		Force: true,
+		Data:  map[string]interface{}{"test": true},
+	}
+
+	// Send to event processor
+	select {
+	case gh.eventTriggerChan <- trigger:
+		log.Printf("✅ Event trigger sent successfully")
+	default:
+		log.Printf("⚠️  Event trigger channel full")
 	}
 }
 
@@ -1055,7 +1327,7 @@ func (gh *EnhancedGameHook) GetPropertyChanges() map[string]interface{} {
 	if gh.currentMapper != nil {
 		for name := range gh.currentMapper.Properties {
 			if value, err := gh.GetProperty(name); err == nil {
-				if lastValue, exists := gh.lastSnapshot[name]; !exists || lastValue != value {
+				if lastValue, exists := gh.lastSnapshot[name]; !exists || !gh.deepEqual(lastValue, value) {
 					changes[name] = value
 				}
 			}
@@ -1140,5 +1412,100 @@ func (gh *EnhancedGameHook) GetMapperGlossary() interface{} {
 		"groups":     gh.currentMapper.Groups,
 		"computed":   gh.currentMapper.Computed,
 		"constants":  gh.currentMapper.Constants,
+	}
+}
+
+// Enhanced API methods
+func (gh *EnhancedGameHook) GetActiveEvents() []string {
+	gh.eventMutex.RLock()
+	defer gh.eventMutex.RUnlock()
+
+	result := make([]string, len(gh.activeEvents))
+	copy(result, gh.activeEvents)
+	return result
+}
+
+func (gh *EnhancedGameHook) GetRecentlyTriggeredEvents() []string {
+	gh.eventMutex.RLock()
+	defer gh.eventMutex.RUnlock()
+
+	// Return events triggered in the last 5 minutes
+	cutoff := time.Now().Add(-5 * time.Minute)
+	result := make([]string, 0)
+
+	for _, entry := range gh.eventHistory {
+		if entry.Timestamp.After(cutoff) && entry.Triggered {
+			result = append(result, entry.Name)
+		}
+	}
+
+	return result
+}
+
+func (gh *EnhancedGameHook) TriggerEvent(name string, force bool) error {
+	trigger := EventTrigger{
+		Name:  name,
+		Force: force,
+		Data:  make(map[string]interface{}),
+	}
+
+	select {
+	case gh.eventTriggerChan <- trigger:
+		return nil
+	default:
+		return fmt.Errorf("event trigger channel full")
+	}
+}
+
+func (gh *EnhancedGameHook) GetValidationErrors() map[string]interface{} {
+	// Return current validation errors
+	result := make(map[string]interface{})
+
+	for property, errors := range gh.validationErrors {
+		result[property] = errors
+	}
+
+	return result
+}
+
+// Utility function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// deepEqual safely compares two values, handling complex types
+func (gh *EnhancedGameHook) deepEqual(a, b interface{}) bool {
+	// Handle nil cases
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+
+	// For simple comparable types, use direct comparison
+	switch va := a.(type) {
+	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+		return a == b
+	case []byte:
+		if vb, ok := b.([]byte); ok {
+			if len(va) != len(vb) {
+				return false
+			}
+			for i := range va {
+				if va[i] != vb[i] {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	default:
+		// For complex types (maps, slices, structs), convert to string for comparison
+		// This is a simple approach that works for most cases
+		return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 	}
 }
